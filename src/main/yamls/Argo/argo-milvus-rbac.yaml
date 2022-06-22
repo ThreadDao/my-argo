@@ -1,0 +1,43 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: argo-milvus-cluster-role
+rules:
+  - apiGroups:
+      - milvus.io
+    resources:
+      - milvusclusters
+      - milvuses
+    verbs:
+      - create
+      - get
+      - list
+      - watch
+      - update
+      - patch
+      - delete
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - patch
+      - list
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cluster-argo-milvus
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: argo-milvus-cluster-role-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: argo-milvus-cluster-role
+subjects:
+  - kind: ServiceAccount
+    name: cluster-argo-milvus
+    namespace: argo

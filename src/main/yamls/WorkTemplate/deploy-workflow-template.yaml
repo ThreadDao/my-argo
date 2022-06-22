@@ -1,0 +1,29 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: deploy-mic
+  namespace: argo
+spec:
+  templates:
+    - name: deploy
+      resource:
+        action: apply
+        manifest: |
+          apiVersion: milvus.io/v1alpha1
+          kind: MilvusCluster
+          metadata:
+            name: mic-argo
+            namespace: default
+            labels:
+              app: milvus
+          spec:
+            dependencies: {}
+            components:
+              image: harbor.zilliz.cc/milvus/milvus:master-20220602-48cf63a2
+            config:
+              log:
+                level: debug
+              common:
+                retentionDuration: 40
+  entrypoint: deploy
+  serviceAccountName: cluster-argo-milvus

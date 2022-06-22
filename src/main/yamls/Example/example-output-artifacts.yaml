@@ -1,0 +1,46 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  generateName: artifact-passing-
+spec:
+  entrypoint: artifact-example
+  templates:
+    - name: artifact-example
+      steps:
+        - - name: generate-artifact
+            template: whalesay
+        - - name: consume-artifact
+            template: print-message
+            arguments:
+              parameters:
+                - name: msg
+                  value: "{{steps.generate-artifact.outputs.parameters.output-param-1}}"
+              artifacts:
+                - name: message
+                  from: "{{steps.generate-artifact.outputs.artifacts.hello-art}}"
+
+    - name: whalesay
+      container:
+        image: docker/whalesay:latest
+        command: [sh, -c]
+        args: ["sleep 1; echo hello world | tee /tmp/hello_world.txt"]
+      outputs:
+        parameters:
+          - name: output-param-1
+            valueFrom:
+              path: /tmp/hello_world.txt
+        artifacts:
+          - name: hello-art
+            path: /tmp/hello_world.txt
+    - name: print-message
+      inputs:
+        parameters:
+          - name: msg
+        artifacts:
+          - name: message
+            path: /tmp/message
+      container:
+        image: docker/whalesay
+        command: [sh, -c]
+        args:
+          - 'echo {{inputs.parameters.msg}} && echo hahaha && cat /tmp/message'

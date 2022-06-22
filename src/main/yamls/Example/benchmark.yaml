@@ -1,0 +1,272 @@
+apiVersion: argoproj.io/v1alpha1
+kind: CronWorkflow
+metadata:
+  name: benchmark-cluster-cron
+  namespace: qa
+spec:
+  workflowSpec:
+    templates:
+      - name: benchmark-loop
+        inputs: {}
+        outputs: {}
+        metadata: {}
+        steps:
+          - - name: call-benchmark-test
+              template: benchmark
+              arguments:
+                parameters:
+                  - name: server-instance
+                    value: '{{workflow.name}}-{{item.instanceId}}'
+                  - name: server-configmap
+                    value: '{{item.server-configmap}}'
+                  - name: client-configmap
+                    value: '{{item.client-configmap}}'
+              withParam: '{{workflow.parameters.configmaps}}'
+      - name: uninstall-all
+        inputs: {}
+        outputs: {}
+        metadata: {}
+        steps:
+          - - name: uninstall-milvus
+              template: uninstall-milvus
+              arguments:
+                parameters:
+                  - name: server-instance
+                    value: '{{workflow.name}}-{{item.instanceId}}'
+              withParam: '{{workflow.parameters.configmaps}}'
+      - name: benchmark
+        inputs:
+          parameters:
+            - name: server-instance
+            - name: server-configmap
+            - name: client-configmap
+        outputs: {}
+        metadata: {}
+        steps:
+          - - name: install-milvus
+              template: install-milvus
+              arguments:
+                parameters:
+                  - name: server-instance
+                    value: '{{inputs.parameters.server-instance}}'
+                  - name: server-configmap
+                    value: '{{inputs.parameters.server-configmap}}'
+          - - name: client-test
+              template: client-test
+              arguments:
+                parameters:
+                  - name: server-instance
+                    value: '{{inputs.parameters.server-instance}}'
+                  - name: server-configmap
+                    value: '{{inputs.parameters.server-configmap}}'
+                  - name: client-configmap
+                    value: '{{inputs.parameters.client-configmap}}'
+      - name: uninstall-milvus
+        inputs:
+          parameters:
+            - name: server-instance
+        outputs: {}
+        metadata: {}
+        container:
+          name: ''
+          image: 'registry.milvus.io/milvus/milvus-test-env:v0.5'
+          command:
+            - /bin/sh
+            - '-c'
+          args:
+            - ' kubectl get pods -n qa-milvus -o wide | grep -E "STATUS|{{inputs.parameters.server-instance}}" &&  helm uninstall -n qa-milvus {{inputs.parameters.server-instance}} && kubectl delete pvc -l app.kubernetes.io/instance={{inputs.parameters.server-instance}} -n qa-milvus  && kubectl delete pvc -l release={{inputs.parameters.server-instance}} -n qa-milvus '
+          resources: {}
+          volumeMounts:
+            - name: kube-config
+              mountPath: /root/.kube
+      - name: uninstall-milvus-1
+        inputs:
+          parameters:
+            - name: server-instance
+          artifacts:
+            - name: charts
+              path: /src/helm
+              git:
+                repo: 'git@github.com:milvus-io/milvus-helm.git'
+                revision: master
+                sshPrivateKeySecret:
+                  name: github-key
+                  key: ssh-private-key
+                insecureIgnoreHostKey: true
+            - name: benchmark-src
+              path: /src/benchmark
+              git:
+                repo: 'git@github.com:zilliztech/milvus_benchmark.git'
+                revision: '{{workflow.parameters.test-client-branch}}'
+                sshPrivateKeySecret:
+                  name: github-key
+                  key: ssh-private-key
+                insecureIgnoreHostKey: true
+        outputs: {}
+        metadata: {}
+        container:
+          name: ''
+          image: 'registry.milvus.io/milvus/milvus-test-env:v0.5'
+          command:
+            - /bin/sh
+            - '-c'
+          args:
+            - >-
+              mkdir
+              /test/milvus/benchmark/milvus_log/{{inputs.parameters.server-instance}};
+              cd /src/benchmark/milvus_benchmark/export_log/ &&
+              ./export_milvus_log.sh -i {{inputs.parameters.server-instance}} -n
+              qa-milvus -p
+              /test/milvus/benchmark/milvus_log/{{inputs.parameters.server-instance}}/logs;
+              kubectl get pods -n qa-milvus -o wide | grep -E
+              "STATUS|{{inputs.parameters.server-instance}}" && kubectl get pvc
+              &&  helm uninstall -n qa-milvus
+              {{inputs.parameters.server-instance}} && kubectl delete pvc -l
+              app.kubernetes.io/instance={{inputs.parameters.server-instance}}
+              -n qa-milvus && kubectl delete pvc -l
+              release={{inputs.parameters.server-instance}} -n qa-milvus
+          resources: {}
+          volumeMounts:
+            - name: kube-config
+              readOnly: true
+              mountPath: /root/.kube
+            - name: db-data-path
+              mountPath: /test
+        volumes:
+          - name: db-data-path
+            flexVolume:
+              driver: fstab/cifs
+              fsType: cifs
+              secretRef:
+                name: cifs-test-secret
+              options:
+                mountOptions: vers=1.0
+                networkPath: //172.16.70.249/test
+      - name: install-milvus
+        inputs:
+          parameters:
+            - name: server-instance
+            - name: server-configmap
+          artifacts:
+            - name: charts
+              path: /src/helm
+              git:
+                repo: 'git@github.com:milvus-io/milvus-helm.git'
+                revision: master
+                sshPrivateKeySecret:
+                  name: github-key
+                  key: ssh-private-key
+                insecureIgnoreHostKey: true
+            - name: benchmark-src
+              path: /src/benchmark
+              git:
+                repo: 'git@github.com:zilliztech/milvus_benchmark.git'
+                revision: '{{workflow.parameters.test-client-branch}}'
+                sshPrivateKeySecret:
+                  name: github-key
+                  key: ssh-private-key
+                insecureIgnoreHostKey: true
+        outputs: {}
+        metadata: {}
+        container:
+          name: ''
+          image: 'registry.milvus.io/milvus/milvus-test-env:v0.5'
+          command:
+            - /bin/sh
+            - '-c'
+          args:
+            - ' cd /src/helm/charts/milvus && cp -r /src/benchmark/milvus_benchmark/* . && cp /configmap-server/config.yaml . && python update.py --src-values=values.yaml --deploy-params=config.yaml && helm install -n qa-milvus --set image.all.repository={{workflow.parameters.milvus-image-repository}} --set minio.persistence.enabled=false  --set image.all.pullPolicy=IfNotPresent  --wait --timeout 30m {{inputs.parameters.server-instance}} . && helm get values {{inputs.parameters.server-instance}} --all && kubectl get pods -n qa-milvus -o wide | grep -E "STATUS|{{inputs.parameters.server-instance}}" '
+          resources: {}
+          volumeMounts:
+            - name: kube-config
+              readOnly: true
+              mountPath: /root/.kube
+            - name: benchmark-server-configmap
+              mountPath: /configmap-server
+        volumes:
+          - name: benchmark-server-configmap
+            configMap:
+              name: '{{inputs.parameters.server-configmap}}'
+      - name: client-test
+        inputs:
+          parameters:
+            - name: server-instance
+            - name: server-configmap
+            - name: client-configmap
+          artifacts:
+            - name: source
+              path: /src
+              git:
+                repo: 'git@github.com:zilliztech/milvus_benchmark.git'
+                revision: '{{workflow.parameters.test-client-branch}}'
+                sshPrivateKeySecret:
+                  name: github-key
+                  key: ssh-private-key
+                insecureIgnoreHostKey: true
+        outputs: {}
+        metadata: {}
+        container:
+          name: ''
+          image: 'registry.milvus.io/milvus/milvus-test-env:v0.4'
+          command:
+            - /bin/sh
+            - '-c'
+          args:
+            - ' cd /src && pip install -i https://pypi.doubanio.com/simple/  --trusted-host pypi.doubanio.com --upgrade pip && pip install -r requirements.txt -i https://pypi.doubanio.com/simple/ --trusted-host pypi.doubanio.com && pip install --extra-index-url https://test.pypi.org/simple/ pymilvus=={{workflow.parameters.test-sdk-version}} && cd milvus_benchmark && export PYTHONPATH=/src && python main.py --host={{inputs.parameters.server-instance}}-milvus.qa-milvus.svc.cluster.local --local --suite=/configmap-client/config.yaml --server-config=/configmap-server/config.yaml '
+          resources: {}
+          volumeMounts:
+            - name: kube-config
+              readOnly: true
+              mountPath: /root/.kube
+            - name: benchmark-server-configmap
+              mountPath: /configmap-server
+            - name: benchmark-client-configmap
+              mountPath: /configmap-client
+            - name: db-data-path
+              mountPath: /test
+        volumes:
+          - name: benchmark-server-configmap
+            configMap:
+              name: '{{inputs.parameters.server-configmap}}'
+          - name: benchmark-client-configmap
+            configMap:
+              name: '{{inputs.parameters.client-configmap}}'
+          - name: db-data-path
+            flexVolume:
+              driver: fstab/cifs
+              fsType: cifs
+              secretRef:
+                name: cifs-test-secret
+              options:
+                mountOptions: vers=1.0
+                networkPath: //172.16.70.249/test
+        activeDeadlineSeconds: 21600
+    entrypoint: benchmark-loop
+    arguments:
+      parameters:
+        - name: milvus-image-repository
+          value: docker-nexus-qa.zilliz.cc/milvusdb/milvus-dev
+        - name: milvus-image-tag
+          value: master-latest
+        - name: test-client-branch
+          value: master
+        - name: configmaps
+          value: ' [ {"instanceId":"1", "server-configmap": "server-single-32c128m", "client-configmap": "client-get-local50m-512" }, {"instanceId":"2", "server-configmap": "server-single-8c16m", "client-configmap": "client-search-locust" }, {"instanceId":"3", "server-configmap": "server-cluster-8c16m", "client-configmap": "client-search-locust" }, {"instanceId":"4", "server-configmap": "server-single-8c16m", "client-configmap": "client-search-locust-1000"}, {"instanceId":"5", "server-configmap": "server-single-16c64m", "client-configmap": "client-search-filter-sift50m-ivf-flat-2048" }, {"instanceId":"6", "server-configmap": "server-single-8c16m", "client-configmap": "client-random-locust" }, {"instanceId":"7", "server-configmap": "server-cluster-8c16m", "client-configmap": "client-random-locust" } ] '
+        - name: test-sdk-version
+          value: 2.1.0.dev78
+    serviceAccountName: qa-admin
+    volumes:
+      - name: kube-config
+        secret:
+          secretName: qa-admin-config
+    onExit: uninstall-all
+  schedule: 0 5 * * *
+  concurrencyPolicy: Allow
+  startingDeadlineSeconds: 0
+  successfulJobsHistoryLimit: 4
+  failedJobsHistoryLimit: 4
+  timezone: Asia/Shanghai
+  workflowMetadata:
+    creationTimestamp: null
+    labels:
+      submit-by: benchmark-cron

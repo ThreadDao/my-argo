@@ -1,0 +1,83 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  annotations:
+    workflows.argoproj.io/description: |
+      Checkout out from Git and test application.
+  name: chaos-test
+spec:
+  entrypoint: main
+  volumeClaimTemplates:
+    - metadata:
+        name: workdir
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: 1Gi
+  arguments:
+    parameters:
+      - name: repo
+        value: https://github.com/ThreadDao/milvus.git
+      - name: branch
+        value: memory-replica
+      - name: host
+        value: 10.100.32.156
+      - name: port
+        value: 30683
+  templates:
+    - name: main
+      steps:
+        - - name: git-clone
+            template: git-clone
+            arguments:
+              parameters:
+                - name: repo
+                  value: "{{workflow.parameters.repo}}"
+                - name: branch
+                  value: "{{workflow.parameters.branch}}"
+        - - name: run-test
+            template: run-test
+            arguments:
+              parameters:
+                - name: host
+                  value: "{{workflow.parameters.host}}"
+                - name: port
+                  value: "{{workflow.parameters.port}}"
+    - name: git-clone
+      inputs:
+        parameters:
+          - name: repo
+          - name: branch
+        artifacts:
+          - name: argo-source
+            path: /milvus
+            git:
+              repo: "{{inputs.parameters.repo}}"
+              revision: "{{inputs.parameters.branch}}"
+              insecureIgnoreHostKey: true
+      container:
+        name: ''
+        image: 'milvusdb/pytest:20220525-de0ba6d'
+        command:
+          - sh
+          - '-c'
+        args:
+          - git branch && pwd && python --version
+        workingDir: /milvus
+    # run test
+    - name: run-test
+      inputs:
+        parameters:
+          - name: host
+          - name: port
+      container:
+        image: milvusdb/pytest:20220525-de0ba6d
+        command: [ sh, -c ]
+        args: [ "
+          cd /milvus/tests/python_client;
+          pip install --upgrade pip;
+          pip install -r requirements.txt;
+          pytest testcases/test_e2e.py --host {{inputs.parameters.host}} --port {{inputs.parameters.port}} -v -s
+        " ]
+        workingDir: /milvus

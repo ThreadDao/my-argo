@@ -1,0 +1,90 @@
+apiVersion: argoproj.io/v1alpha1
+kind: CronWorkflow
+metadata:
+  name: milvus-compaction-cron
+spec:
+  schedule: "0 11 * * *"
+  workflowSpec:
+    arguments:
+      parameters:
+        - name: milvus-cluster-release
+          value: mic-compact
+        - name: milvus-standalone-release
+          value: milvus-compact
+        - name: milvus-image-tag
+          value: master-20220619-516d9147
+    entrypoint: compaction-test
+    onExit: uninstall-both
+    templates:
+      - name: compaction-test
+        dag:
+          tasks:
+            - name: cluster-compaction-test
+              template: cluster-compaction-test
+            - name: standalone-compaction-test
+              template: standalone-compaction-test
+      - name: cluster-compaction-test
+        steps:
+          - - name: deploy-mic
+              templateRef:
+                name: deploy-compact-mic
+                template: deploy-compact-mic
+              arguments:
+                parameters:
+                  - name: milvus-image-tag
+                    value: "{{workflow.parameters.milvus-image-tag}}"
+                  - name: milvus-release
+                    value: "{{workflow.parameters.milvus-cluster-release}}"
+          - - name: client-test
+              template: client-test
+              arguments:
+                parameters:
+                  - name: milvus-release
+                    value: "{{workflow.parameters.milvus-cluster-release}}"
+      - name: standalone-compaction-test
+        steps:
+          - - name: deploy-milvus
+              templateRef:
+                name: deploy-compact-milvus
+                template: deploy-compact-milvus
+              arguments:
+                parameters:
+                  - name: milvus-image-tag
+                    value: "{{workflow.parameters.milvus-image-tag}}"
+                  - name: milvus-release
+                    value: "{{workflow.parameters.milvus-standalone-release}}"
+          - - name: client-test
+              template: client-test
+              arguments:
+                parameters:
+                  - name: milvus-release
+                    value: "{{workflow.parameters.milvus-standalone-release}}"
+      - name: client-test
+        inputs:
+          parameters:
+            - name: milvus-release
+          artifacts:
+            - name: source
+              path: /src/milvus
+              git:
+                repo: 'https://github.com/milvus-io/milvus.git'
+                revision: 'master'
+                insecureIgnoreHostKey: true
+        container:
+          image: 'registry.milvus.io/milvus/milvus-test-env:v0.5'
+          command:
+            - /bin/sh
+            - '-c'
+          args:
+            - 'cd /src/milvus/tests/python_client && pip install --upgrade pip && pip install -r requirements.txt && pytest testcases/test_compaction.py -n 4 --host={{inputs.parameters.milvus-release}}-milvus.default.svc.cluster.local'
+      - name: uninstall-both
+        container:
+          name: main
+          image: 'registry.milvus.io/milvus/milvus-test-env:v0.5'
+          command:
+            - /bin/sh
+            - '-c'
+          args:
+            - 'kubectl delete mic {{workflow.parameters.milvus-cluster-release}} -n default && kubectl delete milvus {{workflow.parameters.milvus-standalone-release}} -n default'
+    serviceAccountName: cluster-argo-milvus
+    activeDeadlineSeconds: 3600

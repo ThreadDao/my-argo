@@ -1,0 +1,35 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: chaos-memory-test
+  namespace: argo
+spec:
+  entrypoint: chaos-test
+  arguments:
+    parameters:
+      - name: repo
+        value: https://github.com/ThreadDao/milvus.git
+      - name: branch
+        value: memory-replica
+      - name: host
+        value: 10.100.32.156
+      - name: port
+        value: 30683
+  templates:
+    - name: chaos-test
+      inputs:
+        artifacts:
+          - name: source
+            path: /milvus
+            git:
+              repo: '{{workflow.parameters.repo}}'
+              revision: '{{workflow.parameters.branch}}'
+              insecureIgnoreHostKey: true
+      container:
+          #        image: 'registry.milvus.io/milvus/milvus-test-env:v0.5'
+        image: 'milvusdb/pytest:20220525-de0ba6d'
+        command:
+          - /bin/sh
+          - '-c'
+        args:
+          - ' cd /milvus/tests/python_client && pip install --upgrade pip && pip install -r requirements.txt && pytest testcases/test_e2e.py --host={{workflow.parameters.host}} --port={{workflow.parameters.port}}'
