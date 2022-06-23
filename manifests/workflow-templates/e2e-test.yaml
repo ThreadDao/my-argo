@@ -18,9 +18,9 @@ spec:
   arguments:
     parameters:
       - name: repo
-        value: https://github.com/ThreadDao/milvus.git
+        value: https://github.com/milvus-io/milvus.git
       - name: branch
-        value: memory-replica
+        value: master
       - name: host
         value: 10.100.32.156
       - name: port
@@ -28,46 +28,18 @@ spec:
   templates:
     - name: main
       steps:
-        - - name: git-clone
-            template: git-clone
-            arguments:
-              parameters:
-                - name: repo
-                  value: "{{workflow.parameters.repo}}"
-                - name: branch
-                  value: "{{workflow.parameters.branch}}"
         - - name: run-test
             template: run-test
-            arguments:
-              parameters:
-                - name: host
-                  value: "{{workflow.parameters.host}}"
-                - name: port
-                  value: "{{workflow.parameters.port}}"
-    - name: git-clone
-      inputs:
-        parameters:
-          - name: repo
-          - name: branch
-        artifacts:
-          - name: argo-source
-            path: /milvus
-            git:
-              repo: "{{inputs.parameters.repo}}"
-              revision: "{{inputs.parameters.branch}}"
-              insecureIgnoreHostKey: true
-      container:
-        name: ''
-        image: 'milvusdb/pytest:20220525-de0ba6d'
-        command:
-          - sh
-          - '-c'
-        args:
-          - git branch && pwd && python --version
-        workingDir: /milvus
     # run test
     - name: run-test
       inputs:
+        artifacts:
+          - name: source
+            path: /src/milvus
+            git:
+              repo: "{{workflow.parameters.repo}}"
+              revision: "{{workflow.parameters.branch}}"
+              insecureIgnoreHostKey: true
         parameters:
           - name: host
           - name: port
@@ -75,9 +47,9 @@ spec:
         image: milvusdb/pytest:20220525-de0ba6d
         command: [ sh, -c ]
         args: [ "
-          cd /milvus/tests/python_client;
+          cd /src/milvus/tests/python_client;
           pip install --upgrade pip;
+          pip install --upgrade setuptools;
           pip install -r requirements.txt;
-          pytest testcases/test_e2e.py --host {{inputs.parameters.host}} --port {{inputs.parameters.port}} -v -s
+          pytest testcases/test_e2e.py --host {{workflow.parameters.host}} --port {{workflow.parameters.port}} -v -s
         " ]
-        workingDir: /milvus
