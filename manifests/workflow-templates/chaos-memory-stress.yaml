@@ -1,0 +1,84 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: chaos-memory-stress
+  namespace: argo
+spec:
+  entrypoint: chaos-memory-stress
+  arguments:
+    parameters:
+      - name: label-instance
+        value: milvus-cluster
+      - name: label-component
+        value: datanode
+      - name: memory-workers
+        value: 4
+      - name: memory-size
+        value: 6Gi
+      - name: chaos-duration
+        value: 1m
+  templates:
+    - name: apply-chaos-memory
+      steps:
+        - - name: apply-memory-stress
+            template: apply-memory-chaos
+        - - name: suspend
+            template: suspend
+            arguments:
+              parameters:
+                - name: chaos-duration
+                  value: {{steps.apply-memory-chaos.outputs.chaos-duration}}
+        - - name: delete-memory-stress
+            template: delete-chaos
+            arguments:
+              parameters:
+                - name: chaos-name
+                  value:  {{steps.apply-memory-chaos.outputs.chaos-name}}
+    - name: deploy-chaos
+      resource:
+        action: apply
+        manifest: |
+          kind: StressChaos
+          apiVersion: chaos-mesh.org/v1alpha1
+          metadata:
+            name: memory-stress-{{workflow.parameters.label-instance}}-{{workflow.parameters.label-component}}
+            namespace: default
+          spec:
+            selector:
+              namespaces:
+                - default
+              labelSelectors:
+                app.kubernetes.io/name: milvus
+                app.kubernetes.io/instance: {{workflow.parameters.label-instance}}
+                app.kubernetes.io/component: {{workflow.parameters.label-component}}
+            mode: all
+            value: "2"
+            stressors:
+              memory:
+                workers: {{workflow.parameters.memory-workers}}
+                size: {{workflow.parameters.memory-size}}
+            duration: {{workflow.parameters.chaos-duration}}
+      outputs:
+        parameters:
+          - name: chaos-name
+            valueFrom:
+              jsonPath: '{.metadata.name}'
+          - name: chaos-duration
+            valueFrom:
+              jsonPath: '{.spec.duration}'
+    - name: suspend
+      inputs:
+        parameters:
+          - name: chaos-duration
+      suspend:
+        duration: {{inputs.parameters.chaos-duration}}
+    - name: delete-chaos
+      inputs:
+        parameters:
+          - name: chaos-name
+      script:
+        image: bitnami/kubectl:1.21.4
+        command: [sh]
+        source: |
+          kubectl delete stresschaos {{inputs.parameters.chaos-name}}
+  serviceAccountName: cluster-argo-milvus

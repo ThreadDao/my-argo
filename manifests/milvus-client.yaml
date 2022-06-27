@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: milvus-test-pod
+  labels:
+    app: milvus-test
+spec:
+  containers:
+    - name: milvus-test
+      image: 'registry.milvus.io/milvus/milvus-test-env:v0.5'
+      command:
+        - cat
+      tty: true

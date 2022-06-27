@@ -1,0 +1,111 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: milvus-compaction-test
+  namespace: argo
+spec:
+  templates:
+    - name: compaction-test
+      dag:
+        tasks:
+          - name: cluster-compaction-test
+            template: cluster-compaction-test
+          - name: standalone-compaction-test
+            template: standalone-compaction-test
+    - name: cluster-compaction-test
+      steps:
+        - - name: deploy-cluster
+            templateRef:
+              name: deploy-compact-milvus
+              template: deploy-compact-cluster
+            arguments:
+              parameters:
+                - name: milvus-image-tag
+                  value: '{{workflow.parameters.image-tag}}'
+                - name: cluster-release
+                  value: '{{workflow.parameters.cluster-release}}'
+        - - name: wait-healthy
+            templateRef:
+              name: wait-milvus-healthy
+              template: wait-milvus-healthy
+            arguments:
+              parameters:
+                - name: milvus-release
+                  value: '{{workflow.parameters.cluster-release}}'
+        - - name: client-test
+            template: client-test
+            arguments:
+              parameters:
+                - name: milvus-release
+                  value: '{{workflow.parameters.cluster-release}}'
+    - name: standalone-compaction-test
+      steps:
+        - - name: deploy-standalone
+            arguments:
+              parameters:
+                - name: milvus-image-tag
+                  value: '{{workflow.parameters.image-tag}}'
+                - name: standalone-release
+                  value: '{{workflow.parameters.standalone-release}}'
+            templateRef:
+              name: deploy-compact-milvus
+              template: deploy-compact-standalone
+        - - name: wait-healthy
+            templateRef:
+              name: wait-milvus-healthy
+              template: wait-milvus-healthy
+            arguments:
+              parameters:
+                - name: milvus-release
+                  value: '{{workflow.parameters.standalone-release}}'
+        - - name: client-test
+            template: client-test
+            arguments:
+              parameters:
+                - name: milvus-release
+                  value: '{{workflow.parameters.standalone-release}}'
+    - name: client-test
+      inputs:
+        parameters:
+          - name: milvus-release
+        artifacts:
+          - name: source
+            path: /src/milvus
+            git:
+              repo: 'https://github.com/milvus-io/milvus.git'
+              revision: 2.1.0
+              insecureIgnoreHostKey: true
+      container:
+        image: 'registry.milvus.io/milvus/milvus-test-env:v0.5'
+        command:
+          - /bin/sh
+          - '-c'
+        args:
+          - >-
+            cd /src/milvus/tests/python_client && pip install --upgrade
+            setuptools && pip install --upgrade pip &&  pip install
+            --no-cache-dir -r requirements.txt && pytest
+            testcases/test_compaction.py -n 4
+            --host={{inputs.parameters.milvus-release}}-milvus.default.svc.cluster.local
+    - name: uninstall-both
+      container:
+        name: main
+        image: 'registry.milvus.io/milvus/milvus-test-env:v0.5'
+        command:
+          - /bin/sh
+          - '-c'
+        args:
+          - >-
+            kubectl delete milvus {{workflow.parameters.cluster-release}} {{workflow.parameters.standalone-release}} -n default
+  entrypoint: compaction-test
+  arguments:
+    parameters:
+      - name: cluster-release
+        value: compact-cluster
+      - name: standalone-release
+        value: compact-standalone
+      - name: image-tag
+        value: master-20220623-1fbdafc9
+  serviceAccountName: cluster-argo-milvus
+  onExit: uninstall-both
+  activeDeadlineSeconds: 7200

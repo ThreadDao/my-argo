@@ -1,0 +1,28 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: wait-milvus-healthy
+  namespace: argo
+spec:
+  templates:
+    - name: wait-milvus-healthy
+      inputs:
+        parameters:
+          - name: milvus-release
+      script:
+        image: bitnami/kubectl:1.21.4
+        command:
+          - sh
+        source: |
+          kubectl -n default wait --for=condition=MilvusReady milvus/{{inputs.parameters.milvus-release}} --timeout 30m
+          kubectl describe milvus {{inputs.parameters.milvus-release}} -n default
+    - name: wait-milvus-pods-running
+      inputs:
+        parameters:
+          - name: milvus-release
+      script:
+        image: bitnami/kubectl:1.21.4
+        command:
+          - sh
+        source: |
+          k wait --for=condition=ready pod -l app.kubernetes.io/instance={{inputs.parameters.milvus-release}} --timeout 20m

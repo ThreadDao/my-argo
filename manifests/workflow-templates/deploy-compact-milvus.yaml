@@ -4,25 +4,62 @@ metadata:
   name: deploy-compact-milvus
   namespace: argo
 spec:
+  serviceAccountName: cluster-argo-milvus
+  arguments:
+    parameters:
+      - name: cluster-release
+        value: my-cluster
+      - name: standalone-release
+        value: my-standalone
+      - name: image-tag
+        value: master-latest
   templates:
-    - name: deploy-compact-milvus
-      steps:
-        - - name: deploy-compact-milvus
-            template: deploy-milvus
-        - - name: wait-healthy
-            template: wait-healthy
-    - name: deploy-milvus
+    - name: deploy-compact-cluster
       resource:
         action: apply
         manifest: |
-          apiVersion: milvus.io/v1alpha1
+          apiVersion: milvus.io/v1beta1
           kind: Milvus
           metadata:
-            name: '{{workflow.parameters.milvus-standalone-release}}'
+            name: {{workflow.parameters.cluster-release}}
             namespace: default
             labels:
               app: milvus
           spec:
+            mode: cluster
+            dependencies: 
+              etcd:
+                inCluster:
+                  deletionPolicy: Delete
+                  pvcDeletion: true
+              pulsar:
+                inCluster:
+                  deletionPolicy: Delete
+                  pvcDeletion: true
+              storage:
+                inCluster:
+                  deletionPolicy: Delete
+                  pvcDeletion: true
+            components:
+              image: milvusdb/milvus-dev:{{workflow.parameters.image-tag}}
+            config:
+              log:
+                level: debug
+              common:
+                retentionDuration: 40
+    - name: deploy-compact-standalone
+      resource:
+        action: apply
+        manifest: |
+          apiVersion: milvus.io/v1beta1
+          kind: Milvus
+          metadata:
+            name: {{workflow.parameters.standalone-release}}
+            namespace: default
+            labels:
+              app: milvus
+          spec:
+            mode: standalone
             dependencies: 
               etcd:
                 inCluster:
@@ -32,24 +69,10 @@ spec:
                 inCluster:
                   deletionPolicy: Delete
                   pvcDeletion: true
-            image: harbor.zilliz.cc/milvus/milvus:{{workflow.parameters.milvus-image-tag}}
+            components:
+              image: milvusdb/milvus-dev:{{workflow.parameters.image-tag}}
             config:
               log:
                 level: debug
               common:
                 retentionDuration: 40
-    - name: wait-healthy
-      script:
-        image: bitnami/kubectl:1.21.4
-        command: [ sh ]
-        source: |
-          kubectl -n default wait --for=condition=MilvusReady milvus/{{workflow.parameters.milvus-standalone-release}} --timeout 20m
-          kubectl describe milvus {{workflow.parameters.milvus-standalone-release}}
-  entrypoint: deploy-compact-milvus
-  arguments:
-    parameters:
-      - name: milvus-image-tag
-        value: master-latest
-      - name: milvus-standalone-release
-        value: milvus-compact
-  serviceAccountName: cluster-argo-milvus

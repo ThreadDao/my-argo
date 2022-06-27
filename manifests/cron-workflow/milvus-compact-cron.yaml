@@ -1,0 +1,43 @@
+apiVersion: argoproj.io/v1alpha1
+kind: CronWorkflow
+metadata:
+  name: milvus-compaction-test-cron
+  namespace: argo
+spec:
+  workflowSpec:
+    templates:
+      - name: compaction-test-cron
+        dag:
+          tasks:
+            - name: cluster-compaction-test
+              templateRef:
+                name: milvus-compaction-test
+                template: cluster-compaction-test
+            - name: standalone-compaction-test
+              templateRef:
+                name: milvus-compaction-test
+                template: standalone-compaction-test
+      - name: uninstall-all
+        container:
+          name: main
+          image: 'registry.milvus.io/milvus/milvus-test-env:v0.5'
+          command:
+            - /bin/sh
+            - '-c'
+          args:
+            - >-
+              kubectl delete milvus {{workflow.parameters.cluster-release}} {{workflow.parameters.standalone-release}} -n default
+    entrypoint: compaction-test-cron
+    onExit: uninstall-all
+    arguments:
+      parameters:
+        - name: cluster-release
+          value: compact-cluster
+        - name: standalone-release
+          value: compact-standalone
+        - name: image-tag
+          value: 2.1.0-latest
+    serviceAccountName: cluster-argo-milvus
+    activeDeadlineSeconds: 3600
+  schedule: 0 22 * * *
+  timezone: Asia/Shanghai
