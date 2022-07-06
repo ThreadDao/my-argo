@@ -1348,8 +1348,8 @@ metadata:
     app: postgres
   name: argo-postgres-config
 stringData:
-  password: password
-  username: postgres
+  password: xxx
+  username: xxx
 type: Opaque
 ---
 apiVersion: v1

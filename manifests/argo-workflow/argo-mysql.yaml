@@ -1,14 +1,12 @@
-apiVersion: v1
-kind: Secret
-metadata:
-  labels:
-    app: mysql
-  name: argo-mysql-config
-stringData:
-  password: password
-  username: mysql
-  type: Opaque
----
+# actually deploy mysql by helm
+#  helm install argo-mysql bitnami/mysql \
+#  --set image.repository=bitnami/mysql \
+#  --set image.tag=5.7 \
+#  --set auth.database=argo \
+#  --set auth.username=mysql \
+#  --set auth.password=xxxx \
+#  --set primary.persistence.enabled=true \
+#  --set fullnameOverride=argo-mysql -n argo
 apiVersion: v1
 kind: Service
 metadata:
@@ -22,6 +20,19 @@ spec:
       targetPort: 3306
   selector:
     app: mysql
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-pv-claim
+  labels:
+    app: mysql
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -42,28 +53,31 @@ spec:
       containers:
         - env:
             - name: MYSQL_USER
-              value: mysql
+              valueFrom:
+                secretKeyRef:
+                  name: argo-mysql-config
+                  key: username
             - name: MYSQL_PASSWORD
-              value: password
+              valueFrom:
+                secretKeyRef:
+                  name: argo-mysql-config
+                  key: password
             - name: MYSQL_DATABASE
               value: argo
             - name: MYSQL_RANDOM_ROOT_PASSWORD
-              value: "yes"
+              valueFrom:
+                secretKeyRef:
+                  name: argo-mysql-config
+                  key: rootpassword
           image: mysql:5.7
           name: main
           ports:
             - containerPort: 3306
-          readinessProbe:
-            exec:
-              command:
-                - mysql
-                - -u
-                - mysql
-                - -ppassword
-                - argo
-                - -e
-                - SELECT 1
-            initialDelaySeconds: 15
-            timeoutSeconds: 2
-      nodeSelector:
-        kubernetes.io/os: linux
+          volumeMounts:
+            - mountPath: /var/lib/mysql
+              name: mysql-persistent-storage
+      volumes:
+        - name: mysql-persistent-storage
+          persistentVolumeClaim:
+            claimName: mysql-pv-claim
+

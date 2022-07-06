@@ -1,14 +1,10 @@
-apiVersion: v1
-kind: Secret
-metadata:
-  labels:
-    app: minio
-  name: my-minio-cred
-stringData:
-  accesskey: admin
-  secretkey: password
-type: Opaque
----
+# actually deploy minio by helm
+#  helm install argo-artifacts minio/minio \
+#  --set service.type=NodePort \
+#  --set defaultBucket.enabled=true \
+#  --set defaultBucket.name=my-bucket \
+#  --set persistence.enabled=true \
+#  --set fullnameOverride=argo-artifacts -n argo
 apiVersion: v1
 kind: Service
 metadata:
@@ -52,9 +48,9 @@ spec:
             - /data
           env:
             - name: MINIO_ACCESS_KEY
-              value: admin
+              value: xxx
             - name: MINIO_SECRET_KEY
-              value: password
+              value: xxx
           image: minio/minio
           lifecycle:
             postStart:

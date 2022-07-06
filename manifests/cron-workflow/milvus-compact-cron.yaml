@@ -5,6 +5,10 @@ metadata:
   namespace: argo
 spec:
   workflowSpec:
+    artifactGC:
+      strategy: OnWorkflowDeletion
+    podGC:
+      strategy: OnWorkflowSuccess
     templates:
       - name: compaction-test-cron
         dag:

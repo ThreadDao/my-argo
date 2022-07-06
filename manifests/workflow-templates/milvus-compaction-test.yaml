@@ -109,3 +109,5 @@ spec:
   serviceAccountName: cluster-argo-milvus
   onExit: uninstall-both
   activeDeadlineSeconds: 7200
+  artifactGC:
+    strategy: OnWorkflowDeletion
