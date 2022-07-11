@@ -1,0 +1,47 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: chaos-memory-stress-by-label
+  namespace: chaos-testing
+spec:
+  entrypoint: chaos-memory-stress-by-label
+  templates:
+    - name: chaos-memory-stress-by-label
+      steps:
+        - - name: chaos-memory-stress
+            template: chaos-memory-stress
+    - name: chaos-memory-stress
+      resource:
+        action: apply
+        manifest: |
+          apiVersion: chaos-mesh.org/v1alpha1
+          kind: StressChaos
+          metadata:
+            name: test-standalone-memory-stress
+            namespace: chaos-testing
+          spec:
+            selector:
+              namespaces:
+                - default
+              labelSelectors:
+                app.kubernetes.io/name: milvus
+                app.kubernetes.io/instance: {{workflow.parameters.milvus-release}}
+                app.kubernetes.io/component: {{workflow.parameters.chaos-component}}
+            mode: all
+            value: "2"
+            stressors:
+              memory:
+                workers: 4
+                size: {{workflow.parameters.memory-size}}
+            duration: {{workflow.parameters.chaos-duration}}
+  arguments:
+    parameters:
+      - name: milvus-release
+        value: standalone-memory
+      - name: chaos-component
+        value: standalone
+      - name: chaos-duration
+        value: 5m
+      - name: memory-size
+        value: 3Gi
+  serviceAccountName: cluster-chaos-milvus

@@ -1,0 +1,42 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: chaos-milvus-cluster-role
+rules:
+  - apiGroups:
+      - chaos-mesh.org
+    resources:
+      - stresschaos
+    verbs:
+      - create
+      - get
+      - list
+      - watch
+      - update
+      - patch
+      - delete
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - patch
+      - list
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cluster-chaos-milvus
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: chaos-milvus-cluster-role-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: chaos-milvus-cluster-role
+subjects:
+  - kind: ServiceAccount
+    name: cluster-chaos-milvus
+    namespace: chaos-testing
