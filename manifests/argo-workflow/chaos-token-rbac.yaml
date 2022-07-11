@@ -22,6 +22,18 @@ rules:
     verbs:
       - patch
       - list
+  - apiGroups:
+      - milvus.io
+    resources:
+      - milvuses
+    verbs:
+      - create
+      - get
+      - list
+      - watch
+      - update
+      - patch
+      - delete
 ---
 apiVersion: v1
 kind: ServiceAccount
