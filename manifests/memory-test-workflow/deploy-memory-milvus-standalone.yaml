@@ -2,7 +2,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
   name: deploy-memory-milvus-standalone
-  namespace: argo
+  namespace: chaos-testing
 spec:
   entrypoint: deploy-memory-milvus-standalone
   templates:
@@ -14,11 +14,22 @@ spec:
             templateRef:
               name: wait-milvus-healthy
               template: wait-milvus-healthy
+              clusterScope: true
             arguments:
               parameters:
                 - name: milvus-release
                   value: '{{workflow.parameters.milvus-release}}'
     - name: deploy-milvus
+      inputs:
+        parameters:
+          - name: milvus-image-repo
+            value: milvusdb/milvus-dev
+          - name: milvus-image-tag
+            value: 2.1.0-20220707-e902dd97
+          - name: standalone-replicas
+            value: '1'
+          - name: standalone-memory-limit
+            value: 6Gi
       resource:
         action: apply
         manifest: |
@@ -41,25 +52,17 @@ spec:
                   deletionPolicy: Delete
                   pvcDeletion: true
             components:
-              image: {{workflow.parameters.milvus-image-repo}}:{{workflow.parameters.milvus-image-tag}}
+              image: {{inputs.parameters.milvus-image-repo}}:{{inputs.parameters.milvus-image-tag}}
               resources:
                 requests:
                   memory: 500Mi
                 limits:
-                  memory: {{workflow.parameters.standalone-memory-limit}}
+                  memory: {{inputs.parameters.standalone-memory-limit}}
             config:
               log:
                 level: debug
   arguments:
     parameters:
-      - name: milvus-image-repo
-        value: milvusdb/milvus-dev
-      - name: milvus-image-tag
-        value: 2.1.0-20220707-e902dd97
       - name: milvus-release
         value: standalone-memory
-      - name: standalone-replicas
-        value: '1'
-      - name: standalone-memory-limit
-        value: 6Gi
   serviceAccountName: cluster-argo-milvus

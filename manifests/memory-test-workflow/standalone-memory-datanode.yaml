@@ -1,0 +1,113 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: standalone-memory-datanode
+  namespace: chaos-testing
+spec:
+  entrypoint: standalone-memory-datanode
+  serviceAccountName: cluster-chaos-milvus
+  arguments:
+    parameters:
+      - name: milvus-release
+        value: standalone-memory
+      - name: collection-name
+        value: standalone_memory
+  templates:
+    - name: standalone-memory-datanode
+      dag:
+        tasks:
+          - name: deploy-milvus
+            templateRef:
+              name: deploy-memory-milvus-standalone
+              template: deploy-memory-milvus-standalone
+            arguments:
+              parameters:
+                - name: milvus-image-tag
+                  value: 2.1.0-20220711-85117efd
+          - name: init-collection
+            dependencies:
+              - deploy-milvus
+            template: milvus-test
+            arguments:
+              parameters:
+                - name: milvus-case
+                  value: test_init_collection
+          - name: do-insert
+            dependencies:
+              - init-collection
+            template: milvus-test
+            arguments:
+              parameters:
+                - name: milvus-case
+                  value: test_insert
+          - name: apply-memory-chaos
+            dependencies:
+              - init-collection
+            templateRef:
+              name: chaos-memory-stress-by-label
+              template: chaos-memory-stress-by-label
+            arguments:
+              parameters:
+                - name: memory-size
+                  value: 6Gi
+          - name: wait-pods-ready
+            dependencies:
+              - do-insert
+              - apply-memory-chaos
+            templateRef:
+              name: wait-milvus-healthy
+              template: wait-milvus-pods-ready
+              clusterScope: true
+            arguments:
+              parameters:
+                - name: milvus-release
+                  value: '{{workflow.parameters.milvus-release}}'
+          - name: init-collection-check
+            dependencies:
+              - wait-pods-ready
+            template: milvus-test
+            arguments:
+              parameters:
+                - name: milvus-case
+                  value: "{{item}}"
+            withItems:
+              - test_flush
+              - test_load_search_query
+          - name: e2e-test-check
+            dependencies:
+              - wait-pods-ready
+            templateRef:
+              name: e2e-test-check
+              template: e2e-test-check
+              clusterScope: true
+            arguments:
+              parameters:
+                - name: milvus-release
+                  value: '{{workflow.parameters.milvus-release}}'
+                - name: milvus-repo
+                  value: 'https://github.com/ThreadDao/milvus.git'
+                - name: milvus-branch
+                  value: memory-replica
+    - name: milvus-test
+      inputs:
+        parameters:
+          - name: milvus-case
+        artifacts:
+          - name: source
+            path: /src/milvus
+            git:
+              repo: 'https://github.com/ThreadDao/milvus.git'
+              revision: memory-replica
+              insecureIgnoreHostKey: true
+      container:
+        image: 'registry.milvus.io/milvus/milvus-test-env:v0.5'
+        command:
+          - /bin/sh
+          - '-c'
+        activeDeadlineSeconds: 3600
+        args:
+          - >-
+            cd /src/milvus/tests/python_client && pip install --upgrade
+            setuptools && pip install --upgrade pip &&  pip install
+            --no-cache-dir -r requirements.txt && pytest
+            chaos/test_chaos_memory_argo.py::TestMilvusChaos::{{inputs.parameters.milvus-case}} --host={{workflow.parameters.milvus-release}}-milvus.default.svc.cluster.local --collection_name={{workflow.parameters.collection-name}} -v -s

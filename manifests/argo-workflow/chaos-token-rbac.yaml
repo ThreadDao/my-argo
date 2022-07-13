@@ -20,6 +20,8 @@ rules:
     resources:
       - pods
     verbs:
+      - get
+      - watch
       - patch
       - list
   - apiGroups:

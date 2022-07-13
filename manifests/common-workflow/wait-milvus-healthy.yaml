@@ -16,7 +16,7 @@ spec:
         source: |
           kubectl -n default wait --for=condition=MilvusReady milvus/{{inputs.parameters.milvus-release}} --timeout 30m
           kubectl describe milvus {{inputs.parameters.milvus-release}} -n default
-    - name: wait-milvus-pods-running
+    - name: wait-milvus-pods-ready
       inputs:
         parameters:
           - name: milvus-release
@@ -25,4 +25,4 @@ spec:
         command:
           - sh
         source: |
-          k wait --for=condition=ready pod -l app.kubernetes.io/instance={{inputs.parameters.milvus-release}} --timeout 20m
+          kubectl wait --for=condition=ready pod -l app.kubernetes.io/instance={{inputs.parameters.milvus-release}} -n default --timeout 20m

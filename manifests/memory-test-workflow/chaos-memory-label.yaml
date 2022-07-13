@@ -10,14 +10,34 @@ spec:
       steps:
         - - name: chaos-memory-stress
             template: chaos-memory-stress
+        - - name: suspend-duration
+            template: suspend
+            arguments:
+              parameters:
+                - name: duration
+                  value: '{{steps.chaos-memory-stress.outputs.parameters.chaos-duration}}'
+        - - name: delete-stress-chaos
+            template: delete-stress-chaos
+            arguments:
+              parameters:
+                - name: chaos-name
+                  value: '{{steps.chaos-memory-stress.outputs.parameters.chaos-name}}'
     - name: chaos-memory-stress
+      inputs:
+        parameters:
+          - name: chaos-component
+            value: standalone
+          - name: chaos-duration
+            value: 5m
+          - name: memory-size
+            value: 6Gi
       resource:
-        action: apply
+        action: create
         manifest: |
           apiVersion: chaos-mesh.org/v1alpha1
           kind: StressChaos
           metadata:
-            name: test-standalone-memory-stress
+            generateName: '{{inputs.parameters.chaos-component}}-memory-'
             namespace: chaos-testing
           spec:
             selector:
@@ -26,22 +46,40 @@ spec:
               labelSelectors:
                 app.kubernetes.io/name: milvus
                 app.kubernetes.io/instance: {{workflow.parameters.milvus-release}}
-                app.kubernetes.io/component: {{workflow.parameters.chaos-component}}
+                app.kubernetes.io/component: {{inputs.parameters.chaos-component}}
             mode: all
             value: "2"
             stressors:
               memory:
                 workers: 4
-                size: {{workflow.parameters.memory-size}}
-            duration: {{workflow.parameters.chaos-duration}}
+                size: {{inputs.parameters.memory-size}}
+            duration: {{inputs.parameters.chaos-duration}}
+      outputs:
+        parameters:
+          - name: chaos-name
+            valueFrom:
+              jsonPath: '{.metadata.name}'
+          - name: chaos-duration
+            valueFrom:
+              jsonPath: '{.spec.duration}'
+    - name: suspend
+      inputs:
+        parameters:
+          - name: duration
+      suspend:
+        duration: '{{inputs.parameters.duration}}'
+    - name: delete-stress-chaos
+      inputs:
+        parameters:
+          - name: chaos-name
+      script:
+        image: bitnami/kubectl:1.21.4
+        command: [ sh ]
+        source: |
+          echo {{inputs.parameters.chaos-name}}
+          kubectl delete stresschaos {{inputs.parameters.chaos-name}} -n chaos-testing
   arguments:
     parameters:
       - name: milvus-release
         value: standalone-memory
-      - name: chaos-component
-        value: standalone
-      - name: chaos-duration
-        value: 5m
-      - name: memory-size
-        value: 3Gi
   serviceAccountName: cluster-chaos-milvus

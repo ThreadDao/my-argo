@@ -2,7 +2,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
   name: deploy-memory-milvus-cluster
-  namespace: argo
+  namespace: chaos-testing
 spec:
   entrypoint: deploy-memory-milvus-cluster
   templates:
@@ -14,6 +14,7 @@ spec:
             templateRef:
               name: wait-milvus-healthy
               template: wait-milvus-healthy
+              clusterScope: true
             arguments:
               parameters:
                 - name: milvus-release

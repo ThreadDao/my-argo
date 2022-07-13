@@ -1,0 +1,30 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ClusterWorkflowTemplate
+metadata:
+  name: e2e-test-check
+spec:
+  templates:
+    - name: e2e-test-check
+      inputs:
+        parameters:
+          - name: milvus-release
+          - name: milvus-repo
+          - name: milvus-branch
+        artifacts:
+          - name: source
+            path: /src/milvus
+            git:
+              repo: "{{inputs.parameters.milvus-repo}}"
+              revision: "{{inputs.parameters.milvus-branch}}"
+              insecureIgnoreHostKey: true
+      container:
+        image: 'registry.milvus.io/milvus/milvus-test-env:v0.5'
+        command:
+          - /bin/sh
+          - '-c'
+        args:
+          - >-
+            cd /src/milvus/tests/python_client && pip install --upgrade
+            setuptools && pip install --upgrade pip &&  pip install
+            --no-cache-dir -r requirements.txt && pytest
+            testcases/test_e2e.py --host={{inputs.parameters.milvus-release}}-milvus.default.svc.cluster.local -v -s

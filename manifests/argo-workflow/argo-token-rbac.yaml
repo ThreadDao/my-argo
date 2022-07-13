@@ -22,6 +22,8 @@ rules:
       - secrets
     verbs:
       - get
+      - watch
+      - patch
       - list
 ---
 apiVersion: v1
