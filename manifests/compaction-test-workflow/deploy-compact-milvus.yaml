@@ -42,6 +42,7 @@ spec:
                   pvcDeletion: true
             components:
               image: milvusdb/milvus-dev:{{workflow.parameters.image-tag}}
+              imagePullPolicy: Always
             config:
               log:
                 level: debug

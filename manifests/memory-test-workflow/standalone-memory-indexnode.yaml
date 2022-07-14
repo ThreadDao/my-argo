@@ -12,6 +12,8 @@ spec:
         value: standalone-memory
       - name: collection-name
         value: standalone_memory
+      - name: milvus-image-tag
+        value: 2.1.0-latest
   templates:
     - name: standalone-memory-indexnode
       dag:
@@ -23,7 +25,7 @@ spec:
             arguments:
               parameters:
                 - name: milvus-image-tag
-                  value: 2.1.0-20220711-85117efd
+                  value: '{{workflow.parameters.milvus-image-tag}}'
           - name: init-collection
             dependencies:
               - deploy-milvus

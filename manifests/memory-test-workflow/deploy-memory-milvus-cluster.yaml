@@ -47,6 +47,7 @@ spec:
                   pvcDeletion: true
             components:
               image: {{workflow.parameters.milvus-image-repo}}:{{workflow.parameters.milvus-image-tag}}
+              imagePullPolicy: Always
               queryNode:
                 replicas: {{workflow.parameters.querynode-replicas}}
                 resources:
@@ -76,7 +77,7 @@ spec:
       - name: milvus-image-repo
         value: milvusdb/milvus-dev
       - name: milvus-image-tag
-        value: 2.1.0-20220707-e902dd97
+        value: 2.1.0-latest
       - name: milvus-release
         value: cluster-memory
       - name: datanode-replicas

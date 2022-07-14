@@ -25,7 +25,7 @@ spec:
           - name: milvus-image-repo
             value: milvusdb/milvus-dev
           - name: milvus-image-tag
-            value: 2.1.0-20220707-e902dd97
+            value: 2.1.0-latest
           - name: standalone-replicas
             value: '1'
           - name: standalone-memory-limit
@@ -53,6 +53,7 @@ spec:
                   pvcDeletion: true
             components:
               image: {{inputs.parameters.milvus-image-repo}}:{{inputs.parameters.milvus-image-tag}}
+              imagePullPolicy: Always
               resources:
                 requests:
                   memory: 500Mi
