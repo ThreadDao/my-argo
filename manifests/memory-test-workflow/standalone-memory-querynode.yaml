@@ -1,0 +1,98 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: standalone-memory-querynode
+  namespace: chaos-testing
+spec:
+  workflowMetadata:
+    labels:
+      chaos-label: standalone-querynode
+  entrypoint: standalone-memory-indexnode
+  serviceAccountName: cluster-chaos-milvus
+  arguments:
+    parameters:
+      - name: milvus-release
+        value: standalone-memory
+      - name: collection-name
+        value: standalone_query
+      - name: milvus-image-tag
+        value: 2.1.0-latest
+  templates:
+    - name: standalone-memory-indexnode
+      dag:
+        tasks:
+          - name: deploy-milvus
+            templateRef:
+              name: deploy-memory-milvus-standalone
+              template: deploy-memory-milvus-standalone
+            arguments:
+              parameters:
+                - name: milvus-image-tag
+                  value: '{{workflow.parameters.milvus-image-tag}}'
+          - name: init-collection
+            dependencies:
+              - deploy-milvus
+            templateRef:
+              name: chaos-milvus-test
+              template: milvus-test
+            arguments:
+              parameters:
+                - name: milvus-case
+                  value: test_init_collection
+          - name: load-collection
+            dependencies:
+              - init-collection
+            templateRef:
+              name: chaos-milvus-test
+              template: milvus-test
+            arguments:
+              parameters:
+                - name: milvus-case
+                  value: test_load_failed
+          - name: apply-memory-chaos
+            dependencies:
+              - init-collection
+            templateRef:
+              name: chaos-memory-stress-by-label
+              template: chaos-memory-stress-by-label
+            arguments:
+              parameters:
+                - name: memory-size
+                  value: 6Gi
+          - name: wait-pods-ready
+            dependencies:
+              - load-collection
+              - apply-memory-chaos
+            templateRef:
+              name: wait-milvus-healthy
+              template: wait-milvus-pods-ready
+              clusterScope: true
+            arguments:
+              parameters:
+                - name: milvus-release
+                  value: '{{workflow.parameters.milvus-release}}'
+          - name: init-collection-check
+            dependencies:
+              - wait-pods-ready
+            templateRef:
+              name: chaos-milvus-test
+              template: milvus-test
+            arguments:
+              parameters:
+                - name: milvus-case
+                  value: test_init_collection_check
+          - name: e2e-test-check
+            dependencies:
+              - wait-pods-ready
+            templateRef:
+              name: e2e-test-check
+              template: e2e-test-check
+              clusterScope: true
+            arguments:
+              parameters:
+                - name: milvus-release
+                  value: '{{workflow.parameters.milvus-release}}'
+                - name: milvus-repo
+                  value: 'https://github.com/ThreadDao/milvus.git'
+                - name: milvus-branch
+                  value: memory-replica
