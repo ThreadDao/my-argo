@@ -54,6 +54,9 @@ spec:
             components:
               image: {{inputs.parameters.milvus-image-repo}}:{{inputs.parameters.milvus-image-tag}}
               imagePullPolicy: Always
+              rocksmq:
+                persistence:
+                  enabled: true
               resources:
                 requests:
                   memory: 500Mi
