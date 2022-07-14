@@ -76,7 +76,7 @@ spec:
               revision: 2.1.0
               insecureIgnoreHostKey: true
       container:
-        image: 'registry.milvus.io/milvus/milvus-test-env:v0.5'
+        image: 'registry.milvus.io/milvus/milvus-test-env:v1.2'
         command:
           - /bin/sh
           - '-c'
@@ -90,7 +90,7 @@ spec:
     - name: uninstall-both
       container:
         name: main
-        image: 'registry.milvus.io/milvus/milvus-test-env:v0.5'
+        image: 'registry.milvus.io/milvus/milvus-test-env:v1.2'
         command:
           - /bin/sh
           - '-c'

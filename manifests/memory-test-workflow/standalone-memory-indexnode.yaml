@@ -1,10 +1,10 @@
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
-  name: standalone-memory-datanode
+  name: standalone-memory-indexnode
   namespace: chaos-testing
 spec:
-  entrypoint: standalone-memory-datanode
+  entrypoint: standalone-memory-indexnode
   serviceAccountName: cluster-chaos-milvus
   arguments:
     parameters:
@@ -13,7 +13,7 @@ spec:
       - name: collection-name
         value: standalone_memory
   templates:
-    - name: standalone-memory-datanode
+    - name: standalone-memory-indexnode
       dag:
         tasks:
           - name: deploy-milvus
@@ -32,14 +32,14 @@ spec:
               parameters:
                 - name: milvus-case
                   value: test_init_collection
-          - name: do-insert
+          - name: create-index
             dependencies:
               - init-collection
             template: milvus-test
             arguments:
               parameters:
                 - name: milvus-case
-                  value: test_insert
+                  value: test_create_index
           - name: apply-memory-chaos
             dependencies:
               - init-collection
@@ -52,7 +52,7 @@ spec:
                   value: 6Gi
           - name: wait-pods-ready
             dependencies:
-              - do-insert
+              - create-index
               - apply-memory-chaos
             templateRef:
               name: wait-milvus-healthy
@@ -69,10 +69,7 @@ spec:
             arguments:
               parameters:
                 - name: milvus-case
-                  value: "{{item}}"
-            withItems:
-              - test_flush
-              - test_load_search_query
+                  value: test_load_search_query
           - name: e2e-test-check
             dependencies:
               - wait-pods-ready

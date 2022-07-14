@@ -18,7 +18,7 @@ spec:
               revision: "{{inputs.parameters.milvus-branch}}"
               insecureIgnoreHostKey: true
       container:
-        image: 'registry.milvus.io/milvus/milvus-test-env:v0.5'
+        image: 'registry.milvus.io/milvus/milvus-test-env:v1.2'
         command:
           - /bin/sh
           - '-c'
