@@ -1,0 +1,36 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: chaos-milvus-test
+spec:
+  arguments:
+    parameters:
+      - name: milvus-release
+        value: standalone-memory
+      - name: collection-name
+        value: standalone_memory
+  templates:
+    - name: milvus-test
+      activeDeadlineSeconds: 1200
+      inputs:
+        parameters:
+          - name: milvus-case
+        artifacts:
+          - name: source
+            path: /src/milvus
+            git:
+              repo: 'https://github.com/ThreadDao/milvus.git'
+              revision: memory-replica
+              insecureIgnoreHostKey: true
+      container:
+        image: 'registry.milvus.io/milvus/milvus-test-env:v1.2'
+        command:
+          - /bin/sh
+          - '-c'
+        activeDeadlineSeconds: 3600
+        args:
+          - >-
+            cd /src/milvus/tests/python_client && pip install --upgrade
+            setuptools && pip install --upgrade pip &&  pip install
+            --no-cache-dir -r requirements.txt && pytest
+            chaos/test_chaos_memory_argo.py::TestMilvusChaos::{{inputs.parameters.milvus-case}} --host={{workflow.parameters.milvus-release}}-milvus.default.svc.cluster.local --collection_name={{workflow.parameters.collection-name}} -v -s

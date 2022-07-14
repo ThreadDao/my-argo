@@ -11,7 +11,7 @@ spec:
       - name: milvus-release
         value: standalone-memory
       - name: collection-name
-        value: standalone_memory
+        value: standalone_index
       - name: milvus-image-tag
         value: 2.1.0-latest
   templates:
@@ -29,7 +29,9 @@ spec:
           - name: init-collection
             dependencies:
               - deploy-milvus
-            template: milvus-test
+            templateRef:
+              name: chaos-milvus-test
+              template: milvus-test
             arguments:
               parameters:
                 - name: milvus-case
@@ -37,7 +39,9 @@ spec:
           - name: create-index
             dependencies:
               - init-collection
-            template: milvus-test
+            templateRef:
+              name: chaos-milvus-test
+              template: milvus-test
             arguments:
               parameters:
                 - name: milvus-case
@@ -67,11 +71,13 @@ spec:
           - name: init-collection-check
             dependencies:
               - wait-pods-ready
-            template: milvus-test
+            templateRef:
+              name: chaos-milvus-test
+              template: milvus-test
             arguments:
               parameters:
                 - name: milvus-case
-                  value: test_load_search_query
+                  value: test_init_collection_check
           - name: e2e-test-check
             dependencies:
               - wait-pods-ready
@@ -87,26 +93,3 @@ spec:
                   value: 'https://github.com/ThreadDao/milvus.git'
                 - name: milvus-branch
                   value: memory-replica
-    - name: milvus-test
-      inputs:
-        parameters:
-          - name: milvus-case
-        artifacts:
-          - name: source
-            path: /src/milvus
-            git:
-              repo: 'https://github.com/ThreadDao/milvus.git'
-              revision: memory-replica
-              insecureIgnoreHostKey: true
-      container:
-        image: 'registry.milvus.io/milvus/milvus-test-env:v1.2'
-        command:
-          - /bin/sh
-          - '-c'
-        activeDeadlineSeconds: 3600
-        args:
-          - >-
-            cd /src/milvus/tests/python_client && pip install --upgrade
-            setuptools && pip install --upgrade pip &&  pip install
-            --no-cache-dir -r requirements.txt && pytest
-            chaos/test_chaos_memory_argo.py::TestMilvusChaos::{{inputs.parameters.milvus-case}} --host={{workflow.parameters.milvus-release}}-milvus.default.svc.cluster.local --collection_name={{workflow.parameters.collection-name}} -v -s
