@@ -7,9 +7,37 @@ spec:
   entrypoint: deploy-memory-milvus-cluster
   templates:
     - name: deploy-memory-milvus-cluster
+      inputs:
+        parameters:
+          - name: datanode-replicas
+            value: '1'
+          - name: datanode-memory-limit
+            value: 10Gi
+          - name: indexnode-replicas
+            value: '1'
+          - name: indexnode-memory-limit
+            value: 10Gi
+          - name: querynode-replicas
+            value: '1'
+          - name: querynode-memory-limit
+            value: 10Gi
       steps:
         - - name: deploy-milvus-cluster
             template: deploy-milvus
+            arguments:
+              parameters:
+                - name: datanode-replicas
+                  value: '{{inputs.parameters.datanode-replicas}}'
+                - name: datanode-memory-limit
+                  value: '{{inputs.parameters.datanode-memory-limit}}'
+                - name: indexnode-replicas
+                  value: '{{inputs.parameters.indexnode-replicas}}'
+                - name: indexnode-memory-limit
+                  value: '{{inputs.parameters.indexnode-memory-limit}}'
+                - name: querynode-replicas
+                  value: '{{inputs.parameters.querynode-replicas}}'
+                - name: querynode-memory-limit
+                  value: '{{inputs.parameters.querynode-memory-limit}}'
         - - name: wait-healthy
             templateRef:
               name: wait-milvus-healthy
@@ -23,17 +51,11 @@ spec:
       inputs:
         parameters:
           - name: datanode-replicas
-            value: '1'
           - name: datanode-memory-limit
-            value: 6Gi
           - name: indexnode-replicas
-            value: '1'
           - name: indexnode-memory-limit
-            value: 6Gi
           - name: querynode-replicas
-            value: '1'
           - name: querynode-memory-limit
-            value: 6Gi
       resource:
         action: apply
         manifest: |
@@ -68,14 +90,14 @@ spec:
                   requests:
                     memory: 500Mi
                   limits:
-                    memory: {{inputs.parameters.datanode-memory-limit}}
+                    memory: {{inputs.parameters.querynode-memory-limit}}
               dataNode:
                 replicas: {{inputs.parameters.datanode-replicas}}
                 resources:
                   requests:
                     memory: 500Mi
                   limits:
-                    memory: {{inputs.parameters.indexnode-memory-limit}}
+                    memory: {{inputs.parameters.datanode-memory-limit}}
               indexNode:
                 replicas: {{inputs.parameters.indexnode-replicas}}
                 resources:

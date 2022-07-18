@@ -5,11 +5,31 @@ metadata:
   namespace: chaos-testing
 spec:
   entrypoint: chaos-memory-stress-by-label
+  arguments:
+    parameters:
+      - name: milvus-release
+        value: standalone-memory
   templates:
     - name: chaos-memory-stress-by-label
+      inputs:
+        parameters:
+          - name: chaos-component
+            value: standalone
+          - name: chaos-duration
+            value: 5m
+          - name: memory-size
+            value: 6Gi
       steps:
         - - name: chaos-memory-stress
             template: chaos-memory-stress
+            arguments:
+              parameters:
+                - name: chaos-component
+                  value: '{{inputs.parameters.chaos-component}}'
+                - name: chaos-duration
+                  value: '{{inputs.parameters.chaos-duration}}'
+                - name: memory-size
+                  value: '{{inputs.parameters.memory-size}}'
         - - name: suspend-duration
             template: suspend
             arguments:
@@ -78,8 +98,4 @@ spec:
         source: |
           echo {{inputs.parameters.chaos-name}}
           kubectl delete stresschaos {{inputs.parameters.chaos-name}} -n chaos-testing
-  arguments:
-    parameters:
-      - name: milvus-release
-        value: standalone-memory
   serviceAccountName: cluster-chaos-milvus
