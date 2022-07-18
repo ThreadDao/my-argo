@@ -69,4 +69,4 @@ spec:
     parameters:
       - name: milvus-release
         value: standalone-memory
-  serviceAccountName: cluster-argo-milvus
+  serviceAccountName: cluster-chaos-milvus
