@@ -2,19 +2,15 @@ apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
   name: chaos-milvus-test
+  namespace: chaos-testing
 spec:
-  arguments:
-    parameters:
-      - name: milvus-release
-        value: standalone-memory
-      - name: collection-name
-        value: standalone_memory
   templates:
     - name: milvus-test
-      activeDeadlineSeconds: 1200
       inputs:
         parameters:
           - name: milvus-case
+          - name: replica_num
+            value: '1'
         artifacts:
           - name: source
             path: /src/milvus
@@ -23,14 +19,24 @@ spec:
               revision: memory-replica
               insecureIgnoreHostKey: true
       container:
+        name: ''
         image: 'registry.milvus.io/milvus/milvus-test-env:v1.2'
         command:
           - /bin/sh
           - '-c'
-        activeDeadlineSeconds: 3600
         args:
           - >-
             cd /src/milvus/tests/python_client && pip install --upgrade
             setuptools && pip install --upgrade pip &&  pip install
             --no-cache-dir -r requirements.txt && pytest
-            chaos/test_chaos_memory_argo.py::TestMilvusChaos::{{inputs.parameters.milvus-case}} --host={{workflow.parameters.milvus-release}}-milvus.default.svc.cluster.local --collection_name={{workflow.parameters.collection-name}} -v -s
+            chaos/test_chaos_memory_argo.py::TestMilvusChaos::{{inputs.parameters.milvus-case}}
+            --host={{workflow.parameters.milvus-release}}-milvus.default.svc.cluster.local
+            --collection_name={{workflow.parameters.collection-name}}
+            --replica_num={{inputs.parameters.replica_num}} -v -s
+      activeDeadlineSeconds: 3600
+  arguments:
+    parameters:
+      - name: milvus-release
+        value: standalone-memory
+      - name: collection-name
+        value: standalone_memory
