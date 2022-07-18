@@ -7,9 +7,17 @@ spec:
   entrypoint: deploy-memory-milvus-standalone
   templates:
     - name: deploy-memory-milvus-standalone
+      inputs:
+        parameters:
+          - name: standalone-memory-limit
+            value: 6Gi
       steps:
         - - name: deploy-milvus
             template: deploy-milvus
+            arguments:
+              parameters:
+                - name: standalone-memory-limit
+                  value: '{{inputs.parameters.standalone-memory-limit}}'
         - - name: wait-healthy
             templateRef:
               name: wait-milvus-healthy
@@ -22,14 +30,7 @@ spec:
     - name: deploy-milvus
       inputs:
         parameters:
-          - name: milvus-image-repo
-            value: milvusdb/milvus-dev
-          - name: milvus-image-tag
-            value: 2.1.0-latest
-          - name: standalone-replicas
-            value: '1'
           - name: standalone-memory-limit
-            value: 6Gi
       resource:
         action: apply
         manifest: |
@@ -55,18 +56,23 @@ spec:
                 persistence:
                   enabled: true
             components:
-              image: {{inputs.parameters.milvus-image-repo}}:{{inputs.parameters.milvus-image-tag}}
+              image: {{workflow.parameters.milvus-image-repo}}:{{workflow.parameters.milvus-image-tag}}
               imagePullPolicy: Always
-              resources:
-                requests:
-                  memory: 500Mi
-                limits:
-                  memory: {{inputs.parameters.standalone-memory-limit}}
+              standalone:
+                resources:
+                  requests:
+                    memory: 500Mi
+                  limits:
+                    memory: {{inputs.parameters.standalone-memory-limit}}
             config:
               log:
                 level: debug
   arguments:
     parameters:
+      - name: milvus-image-repo
+        value: milvusdb/milvus-dev
+      - name: milvus-image-tag
+        value: 2.1.0-latest
       - name: milvus-release
         value: standalone-memory
   serviceAccountName: cluster-chaos-milvus

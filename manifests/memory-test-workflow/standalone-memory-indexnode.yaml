@@ -8,6 +8,8 @@ spec:
   serviceAccountName: cluster-chaos-milvus
   arguments:
     parameters:
+      - name: milvus-image-repo
+        value: milvusdb/milvus-dev
       - name: milvus-release
         value: standalone-memory
       - name: collection-name
@@ -24,8 +26,8 @@ spec:
               template: deploy-memory-milvus-standalone
             arguments:
               parameters:
-                - name: milvus-image-tag
-                  value: '{{workflow.parameters.milvus-image-tag}}'
+                - name: standalone-memory-limit
+                  value: 6Gi
           - name: init-collection
             dependencies:
               - deploy-milvus
