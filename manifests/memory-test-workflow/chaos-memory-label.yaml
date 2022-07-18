@@ -19,6 +19,8 @@ spec:
             value: 5m
           - name: memory-size
             value: 6Gi
+          - name: chaos-mode
+            value: all
       steps:
         - - name: chaos-memory-stress
             template: chaos-memory-stress
@@ -30,6 +32,8 @@ spec:
                   value: '{{inputs.parameters.chaos-duration}}'
                 - name: memory-size
                   value: '{{inputs.parameters.memory-size}}'
+                - name: chaos-mode
+                  value: '{{inputs.parameters.chaos-mode}}'
         - - name: suspend-duration
             template: suspend
             arguments:
@@ -51,6 +55,8 @@ spec:
             value: 5m
           - name: memory-size
             value: 6Gi
+          - name: chaos-mode
+            value: all
       resource:
         action: create
         manifest: |
@@ -67,7 +73,7 @@ spec:
                 app.kubernetes.io/name: milvus
                 app.kubernetes.io/instance: {{workflow.parameters.milvus-release}}
                 app.kubernetes.io/component: {{inputs.parameters.chaos-component}}
-            mode: all
+            mode: {{inputs.parameters.chaos-mode}}
             value: "2"
             stressors:
               memory:
