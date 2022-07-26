@@ -2,7 +2,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: ClusterWorkflowTemplate
 metadata:
   name: wait-milvus-healthy
-  namespace: argo
+  namespace: qa
 spec:
   templates:
     - name: wait-milvus-healthy
@@ -14,8 +14,8 @@ spec:
         command:
           - sh
         source: |
-          kubectl -n default wait --for=condition=MilvusReady milvus/{{inputs.parameters.milvus-release}} --timeout 30m
-          kubectl describe milvus {{inputs.parameters.milvus-release}} -n default
+          kubectl -n qa wait --for=condition=MilvusReady milvus/{{inputs.parameters.milvus-release}} --timeout 30m
+          kubectl describe milvus {{inputs.parameters.milvus-release}} -n qa
     - name: wait-milvus-pods-ready
       inputs:
         parameters:
@@ -25,4 +25,19 @@ spec:
         command:
           - sh
         source: |
-          kubectl wait --for=condition=ready pod -l app.kubernetes.io/instance={{inputs.parameters.milvus-release}} -n default --timeout 20m
+          kubectl wait --for=condition=ready pod -l app.kubernetes.io/instance={{inputs.parameters.milvus-release}} -n qa --timeout 20m
+    - name: uninstall-both
+      inputs:
+        parameters:
+          - name: milvus-release
+      container:
+        name: main
+        image: bitnami/kubectl:1.21.4
+        command:
+          - /bin/sh
+          - '-c'
+#        todo delete which milvus release
+        args:
+          - >-
+            kubectl delete milvus {{inputs.parameters.milvus-release}} {{workflow.parameters.standalone-release}} -n qa
+

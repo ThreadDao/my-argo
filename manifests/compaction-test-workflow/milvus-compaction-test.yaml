@@ -2,7 +2,8 @@ apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
   name: milvus-compaction-test
-  namespace: argo
+  namespace: qa
+  workflows.argoproj.io/test: compact
 spec:
   templates:
     - name: compaction-test
@@ -18,12 +19,6 @@ spec:
             templateRef:
               name: deploy-compact-milvus
               template: deploy-compact-cluster
-            arguments:
-              parameters:
-                - name: milvus-image-tag
-                  value: '{{workflow.parameters.image-tag}}'
-                - name: cluster-release
-                  value: '{{workflow.parameters.cluster-release}}'
         - - name: wait-healthy
             templateRef:
               name: wait-milvus-healthy
@@ -41,12 +36,6 @@ spec:
     - name: standalone-compaction-test
       steps:
         - - name: deploy-standalone
-            arguments:
-              parameters:
-                - name: milvus-image-tag
-                  value: '{{workflow.parameters.image-tag}}'
-                - name: standalone-release
-                  value: '{{workflow.parameters.standalone-release}}'
             templateRef:
               name: deploy-compact-milvus
               template: deploy-compact-standalone
@@ -72,31 +61,30 @@ spec:
           - name: source
             path: /src/milvus
             git:
-              repo: 'https://github.com/milvus-io/milvus.git'
-              revision: 2.1.0
+              repo: '{{workflow.parameters.milvus-repo}}'
+              revision: '{{workflow.parameters.milvus-revision}}'
               insecureIgnoreHostKey: true
       container:
-        image: 'registry.milvus.io/milvus/milvus-test-env:v1.2'
+        image: 'harbor.milvus.io/qa/fouram:1.0'
         command:
           - /bin/sh
           - '-c'
         args:
           - >-
             cd /src/milvus/tests/python_client && pip install --upgrade
-            setuptools && pip install --upgrade pip &&  pip install
-            --no-cache-dir -r requirements.txt && pytest
-            testcases/test_compaction.py -n 4
-            --host={{inputs.parameters.milvus-release}}-milvus.default.svc.cluster.local
+            setuptools && pip install --upgrade pip &&  pip install -r requirements.txt
+            && pytest testcases/test_compaction.py -n 4
+            --host={{inputs.parameters.milvus-release}}-milvus.qa.svc.cluster.local
     - name: uninstall-both
       container:
         name: main
-        image: 'registry.milvus.io/milvus/milvus-test-env:v1.2'
+        image: 'harbor.milvus.io/qa/fouram:1.0'
         command:
           - /bin/sh
           - '-c'
         args:
           - >-
-            kubectl delete milvus {{workflow.parameters.cluster-release}} {{workflow.parameters.standalone-release}} -n default
+            kubectl delete milvus {{workflow.parameters.cluster-release}} {{workflow.parameters.standalone-release}} -n qa
   entrypoint: compaction-test
   arguments:
     parameters:
@@ -104,9 +92,15 @@ spec:
         value: compact-cluster
       - name: standalone-release
         value: compact-standalone
+      - name: image-repo
+        value: harbor.milvus.io/dockerhub/milvusdb/milvus
       - name: image-tag
-        value: master-20220623-1fbdafc9
-  serviceAccountName: cluster-argo-milvus
+        value: master-latest
+      - name: milvus-repo
+        value: https://github.com/milvus-io/milvus.git
+      - name: milvus-revision
+        value: master
+  serviceAccountName: qa-admin
   onExit: uninstall-both
   activeDeadlineSeconds: 7200
   artifactGC:

@@ -2,7 +2,9 @@ apiVersion: argoproj.io/v1alpha1
 kind: CronWorkflow
 metadata:
   name: milvus-compaction-test-cron
-  namespace: argo
+  namespace: qa
+  labels:
+    workflows.argoproj.io/test: compact
 spec:
   workflowSpec:
     artifactGC:
@@ -24,13 +26,13 @@ spec:
       - name: uninstall-all
         container:
           name: main
-          image: 'registry.milvus.io/milvus/milvus-test-env:v0.5'
+          image: 'harbor.milvus.io/qa/fouram:1.0'
           command:
             - /bin/sh
             - '-c'
           args:
             - >-
-              kubectl delete milvus {{workflow.parameters.cluster-release}} {{workflow.parameters.standalone-release}} -n default
+              kubectl delete milvus {{workflow.parameters.cluster-release}} {{workflow.parameters.standalone-release}} -n qa
     entrypoint: compaction-test-cron
     onExit: uninstall-all
     arguments:
@@ -39,9 +41,15 @@ spec:
           value: compact-cluster
         - name: standalone-release
           value: compact-standalone
+        - name: image-repo
+          value: harbor.milvus.io/dockerhub/milvusdb/milvus-dev
         - name: image-tag
           value: 2.1.0-latest
-    serviceAccountName: cluster-argo-milvus
-    activeDeadlineSeconds: 3600
+        - name: milvus-repo
+          value: https://github.com/milvus-io/milvus.git
+        - name: milvus-revision
+          value: 2.1.0
+    serviceAccountName: qa-admin
+    activeDeadlineSeconds: 7200
   schedule: 0 22 * * *
   timezone: Asia/Shanghai

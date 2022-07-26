@@ -18,7 +18,7 @@ spec:
               revision: "{{inputs.parameters.milvus-branch}}"
               insecureIgnoreHostKey: true
       container:
-        image: 'registry.milvus.io/milvus/milvus-test-env:v1.2'
+        image: 'harbor.milvus.io/qa/fouram:1.0'
         command:
           - /bin/sh
           - '-c'
@@ -27,4 +27,4 @@ spec:
             cd /src/milvus/tests/python_client && pip install --upgrade
             setuptools && pip install --upgrade pip &&  pip install
             --no-cache-dir -r requirements.txt && pytest
-            testcases/test_e2e.py --host={{inputs.parameters.milvus-release}}-milvus.default.svc.cluster.local -v -s
+            testcases/test_e2e.py --host={{inputs.parameters.milvus-release}}-milvus.qa.svc.cluster.local -v -s
