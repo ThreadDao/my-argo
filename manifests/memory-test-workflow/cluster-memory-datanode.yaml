@@ -102,4 +102,4 @@ spec:
                 - name: milvus-repo
                   value: 'https://github.com/ThreadDao/milvus.git'
                 - name: milvus-branch
-                  value: chaos-argo
+                  value: master-chaos-argo

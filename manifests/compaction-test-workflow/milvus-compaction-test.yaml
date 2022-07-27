@@ -3,7 +3,8 @@ kind: WorkflowTemplate
 metadata:
   name: milvus-compaction-test
   namespace: qa
-  workflows.argoproj.io/test: compact
+  labels:
+    workflows.argoproj.io/test: compact
 spec:
   templates:
     - name: compaction-test

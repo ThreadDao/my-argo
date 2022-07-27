@@ -100,4 +100,4 @@ spec:
                 - name: milvus-repo
                   value: 'https://github.com/ThreadDao/milvus.git'
                 - name: milvus-branch
-                  value: memory-replica
+                  value: master-chaos-argo

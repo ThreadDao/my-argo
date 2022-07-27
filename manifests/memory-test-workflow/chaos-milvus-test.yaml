@@ -16,7 +16,7 @@ spec:
             path: /src/milvus
             git:
               repo: 'https://github.com/ThreadDao/milvus.git'
-              revision: chaos-argo
+              revision: master-chaos-argo
               insecureIgnoreHostKey: true
       outputs:
         artifacts:
