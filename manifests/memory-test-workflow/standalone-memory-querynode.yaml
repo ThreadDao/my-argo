@@ -2,25 +2,33 @@ apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
   name: standalone-memory-querynode
-  namespace: chaos-testing
+  namespace: qa
+  labels:
+    workflows.argoproj.io/test: standalone-querynode
 spec:
   workflowMetadata:
     labels:
       chaos-label: standalone-querynode
   entrypoint: standalone-memory-indexnode
-  serviceAccountName: cluster-chaos-milvus
+  serviceAccountName: qa-admin
   arguments:
     parameters:
       - name: milvus-image-repo
-        value: milvusdb/milvus-dev
+        value: harbor.milvus.io/dockerhub/milvusdb/milvus-dev
+      - name: milvus-image-tag
+        value: 2.1.0-latest
       - name: milvus-release
         value: standalone-memory
       - name: collection-name
-        value: standalone_query
-      - name: milvus-image-tag
-        value: 2.1.0-latest
+        value: standalone_data
   templates:
-    - name: standalone-memory-indexnode
+    - name: standalone-memory-querynode
+      inputs:
+        parameters:
+          - name: standalone-memory-limit
+            value: 6Gi
+          - name: chaos-memory-size
+            value: 6Gi
       dag:
         tasks:
           - name: deploy-milvus
@@ -30,7 +38,7 @@ spec:
             arguments:
               parameters:
                 - name: standalone-memory-limit
-                  value: 6Gi
+                  value: '{{inputs.parameters.standalone-memory-limit}}'
           - name: init-collection
             dependencies:
               - deploy-milvus
@@ -60,7 +68,7 @@ spec:
             arguments:
               parameters:
                 - name: memory-size
-                  value: 6Gi
+                  value: '{{inputs.parameters.chaos-memory-size}}'
           - name: wait-pods-ready
             dependencies:
               - load-collection
@@ -68,7 +76,6 @@ spec:
             templateRef:
               name: wait-milvus-healthy
               template: wait-milvus-pods-ready
-              clusterScope: true
             arguments:
               parameters:
                 - name: milvus-release
@@ -89,7 +96,6 @@ spec:
             templateRef:
               name: e2e-test-check
               template: e2e-test-check
-              clusterScope: true
             arguments:
               parameters:
                 - name: milvus-release

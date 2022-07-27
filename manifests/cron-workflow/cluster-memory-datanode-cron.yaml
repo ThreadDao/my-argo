@@ -1,0 +1,42 @@
+apiVersion: argoproj.io/v1alpha1
+kind: CronWorkflow
+metadata:
+  name: cluster-memory-datanode-cron
+  namespace: qa
+  labels:
+    workflows.argoproj.io/test: cluster-datanode
+spec:
+  schedule: 0 0 * * *
+  timezone: Asia/Shanghai
+  workflowSpec:
+    entrypoint: cluster-memory-datanode-test
+    onExit: uninstall-cluster
+    serviceAccountName: qa-admin
+    activeDeadlineSeconds: 7200
+    arguments:
+      parameters:
+        - name: milvus-image-repo
+          value: harbor.milvus.io/dockerhub/milvusdb/milvus-dev
+        - name: milvus-image-tag
+          value: 2.1.0-latest
+        - name: milvus-release
+          value: cluster-memory-datanode
+        - name: collection-name
+          value: cluster_data
+    templates:
+      - name: cluster-memory-datanode-test
+        steps:
+          - - name: cluster-memory-datanode
+              templateRef:
+                name: cluster-memory-datanode
+                template: cluster-memory-datanode
+      - name: uninstall-cluster
+        container:
+          name: main
+          image: bitnami/kubectl:1.21.4
+          command:
+            - /bin/sh
+            - '-c'
+          args:
+            - >-
+              kubectl delete milvus {{workflow.parameters.milvus-release}} -n qa

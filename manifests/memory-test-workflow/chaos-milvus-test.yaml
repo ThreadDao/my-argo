@@ -2,7 +2,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
   name: chaos-milvus-test
-  namespace: chaos-testing
+  namespace: qa
 spec:
   templates:
     - name: milvus-test
@@ -16,11 +16,15 @@ spec:
             path: /src/milvus
             git:
               repo: 'https://github.com/ThreadDao/milvus.git'
-              revision: memory-replica
+              revision: chaos-argo
               insecureIgnoreHostKey: true
+      outputs:
+        artifacts:
+          - name: client-logs
+            path: /tmp/ci_logs
       container:
         name: ''
-        image: 'registry.milvus.io/milvus/milvus-test-env:v1.2'
+        image: 'harbor.milvus.io/qa/fouram:1.0'
         command:
           - /bin/sh
           - '-c'
@@ -30,7 +34,7 @@ spec:
             setuptools && pip install --upgrade pip &&  pip install
             --no-cache-dir -r requirements.txt && pytest
             chaos/test_chaos_memory_argo.py::TestMilvusChaos::{{inputs.parameters.milvus-case}}
-            --host={{workflow.parameters.milvus-release}}-milvus.default.svc.cluster.local
+            --host={{workflow.parameters.milvus-release}}-milvus.qa.svc.cluster.local
             --collection_name={{workflow.parameters.collection-name}}
             --replica_num={{inputs.parameters.replica_num}} -v -s
       activeDeadlineSeconds: 3600

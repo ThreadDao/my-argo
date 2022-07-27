@@ -2,7 +2,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
   name: deploy-memory-milvus-standalone
-  namespace: chaos-testing
+  namespace: qa
 spec:
   entrypoint: deploy-memory-milvus-standalone
   templates:
@@ -22,7 +22,6 @@ spec:
             templateRef:
               name: wait-milvus-healthy
               template: wait-milvus-healthy
-              clusterScope: true
             arguments:
               parameters:
                 - name: milvus-release
@@ -32,15 +31,13 @@ spec:
         parameters:
           - name: standalone-memory-limit
       resource:
-        action: apply
+        action: create
         manifest: |
           apiVersion: milvus.io/v1beta1
           kind: Milvus
           metadata:
-            name: {{workflow.parameters.milvus-release}}
-            namespace: default
-            labels:
-              app: milvus
+            name: {{workflow.parameters.milvus-release}}-
+            namespace: qa
           spec:
             mode: standalone
             dependencies:
@@ -60,8 +57,6 @@ spec:
               imagePullPolicy: Always
               standalone:
                 resources:
-                  requests:
-                    memory: 500Mi
                   limits:
                     memory: {{inputs.parameters.standalone-memory-limit}}
             config:
@@ -70,9 +65,9 @@ spec:
   arguments:
     parameters:
       - name: milvus-image-repo
-        value: milvusdb/milvus-dev
+        value: harbor.milvus.io/dockerhub/milvusdb/milvus-dev
       - name: milvus-image-tag
         value: 2.1.0-latest
       - name: milvus-release
         value: standalone-memory
-  serviceAccountName: cluster-chaos-milvus
+  serviceAccountName: qa-admin

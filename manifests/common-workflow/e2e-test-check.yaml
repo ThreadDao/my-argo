@@ -17,6 +17,10 @@ spec:
               repo: "{{inputs.parameters.milvus-repo}}"
               revision: "{{inputs.parameters.milvus-branch}}"
               insecureIgnoreHostKey: true
+      outputs:
+        artifacts:
+          - name: client-logs
+            path: /tmp/ci_logs
       container:
         image: 'harbor.milvus.io/qa/fouram:1.0'
         command:

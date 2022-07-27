@@ -1,0 +1,48 @@
+# Deprecated Deprecated Deprecated
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: chaos-milvus-operation
+  namespace: qa
+spec:
+  arguments:
+    parameters:
+      - name: milvus-release
+        value: standalone-memory
+      - name: collection-name
+        value: standalone_memory
+  serviceAccountName: qa-admin
+  templates:
+    - name: milvus-operation-test
+      inputs:
+        parameters:
+          - name: chaos-component
+            value: datanode
+      steps:
+        - - name: do-insert
+            when: "{{inputs.parameters.chaos-component}} == datanode"
+            templateRef:
+              name: chaos-milvus-test
+              template: milvus-test
+            arguments:
+              parameters:
+                - name: milvus-case
+                  value: test_insert
+          - name: create-index
+            when: "{{inputs.parameters.chaos-component}} == indexnode"
+            templateRef:
+              name: chaos-milvus-test
+              template: milvus-test
+            arguments:
+              parameters:
+                - name: milvus-case
+                  value: test_create_index
+          - name: load-collection
+            when: "{{inputs.parameters.chaos-component}} == querynode"
+            templateRef:
+              name: chaos-milvus-test
+              template: milvus-test
+            arguments:
+              parameters:
+                - name: milvus-case
+                  value: test_load_failed

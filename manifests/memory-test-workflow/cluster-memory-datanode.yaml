@@ -2,14 +2,16 @@ apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
   name: cluster-memory-datanode
-  namespace: chaos-testing
+  namespace: qa
+  labels:
+    workflows.argoproj.io/test: cluster-datanode
 spec:
   entrypoint: cluster-memory-datanode
-  serviceAccountName: cluster-chaos-milvus
+  serviceAccountName: qa-admin
   arguments:
     parameters:
       - name: milvus-image-repo
-        value: milvusdb/milvus-dev
+        value: harbor.milvus.io/dockerhub/milvusdb/milvus-dev
       - name: milvus-image-tag
         value: 2.1.0-latest
       - name: milvus-release
@@ -18,6 +20,12 @@ spec:
         value: cluster_data
   templates:
     - name: cluster-memory-datanode
+      inputs:
+        parameters:
+          - name: datanode-memory-limit
+            value: 6Gi
+          - name: chaos-memory-size
+            value: 6Gi
       dag:
         tasks:
           - name: deploy-milvus
@@ -27,7 +35,7 @@ spec:
             arguments:
               parameters:
                 - name: datanode-memory-limit
-                  value: 6Gi
+                  value: '{{inputs.parameters.datanode-memory-limit}}'
           - name: init-collection
             dependencies:
               - deploy-milvus
@@ -49,13 +57,15 @@ spec:
                 - name: milvus-case
                   value: test_insert
           - name: apply-memory-chaos
+            dependencies:
+              - init-collection
             templateRef:
               name: chaos-memory-stress-by-label
               template: chaos-memory-stress-by-label
             arguments:
               parameters:
                 - name: memory-size
-                  value: 6Gi
+                  value: '{{inputs.parameters.chaos-memory-size}}'
                 - name: chaos-component
                   value: datanode
           - name: wait-pods-ready
@@ -65,7 +75,6 @@ spec:
             templateRef:
               name: wait-milvus-healthy
               template: wait-milvus-pods-ready
-              clusterScope: true
             arguments:
               parameters:
                 - name: milvus-release
@@ -86,7 +95,6 @@ spec:
             templateRef:
               name: e2e-test-check
               template: e2e-test-check
-              clusterScope: true
             arguments:
               parameters:
                 - name: milvus-release
@@ -94,4 +102,4 @@ spec:
                 - name: milvus-repo
                   value: 'https://github.com/ThreadDao/milvus.git'
                 - name: milvus-branch
-                  value: memory-replica
+                  value: chaos-argo

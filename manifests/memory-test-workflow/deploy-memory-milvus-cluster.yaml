@@ -2,7 +2,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
   name: deploy-memory-milvus-cluster
-  namespace: chaos-testing
+  namespace: qa
 spec:
   entrypoint: deploy-memory-milvus-cluster
   templates:
@@ -12,15 +12,15 @@ spec:
           - name: datanode-replicas
             value: '1'
           - name: datanode-memory-limit
-            value: 10Gi
+            value: 6Gi
           - name: indexnode-replicas
             value: '1'
           - name: indexnode-memory-limit
-            value: 10Gi
+            value: 6Gi
           - name: querynode-replicas
             value: '1'
           - name: querynode-memory-limit
-            value: 10Gi
+            value: 6Gi
       steps:
         - - name: deploy-milvus-cluster
             template: deploy-milvus
@@ -42,7 +42,6 @@ spec:
             templateRef:
               name: wait-milvus-healthy
               template: wait-milvus-healthy
-              clusterScope: true
             arguments:
               parameters:
                 - name: milvus-release
@@ -63,9 +62,7 @@ spec:
           kind: Milvus
           metadata:
             name: {{workflow.parameters.milvus-release}}
-            namespace: default
-            labels:
-              app: milvus
+            namespace: qa
           spec:
             mode: cluster
             dependencies:
@@ -88,21 +85,21 @@ spec:
                 replicas: {{inputs.parameters.querynode-replicas}}
                 resources:
                   requests:
-                    memory: 500Mi
+                    memory: 128Mi
                   limits:
                     memory: {{inputs.parameters.querynode-memory-limit}}
               dataNode:
                 replicas: {{inputs.parameters.datanode-replicas}}
                 resources:
                   requests:
-                    memory: 500Mi
+                    memory: 128Mi
                   limits:
                     memory: {{inputs.parameters.datanode-memory-limit}}
               indexNode:
                 replicas: {{inputs.parameters.indexnode-replicas}}
                 resources:
                   requests:
-                    memory: 500Mi
+                    memory: 128Mi
                   limits:
                     memory: {{inputs.parameters.indexnode-memory-limit}}
             config:
@@ -111,9 +108,9 @@ spec:
   arguments:
     parameters:
       - name: milvus-image-repo
-        value: milvusdb/milvus-dev
+        value: harbor.milvus.io/dockerhub/milvusdb/milvus-dev
       - name: milvus-image-tag
         value: 2.1.0-latest
       - name: milvus-release
         value: cluster-memory
-  serviceAccountName: cluster-chaos-milvus
+  serviceAccountName: qa-admin

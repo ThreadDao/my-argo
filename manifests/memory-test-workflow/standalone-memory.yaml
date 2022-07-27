@@ -1,12 +1,13 @@
+# Deprecated Deprecated Deprecated
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
-  name: cluster-memory-querynode
+  name: standalone-memory
   namespace: qa
   labels:
-    workflows.argoproj.io/test: cluster-querynode
+    workflows.argoproj.io/test: standalone-memory
 spec:
-  entrypoint: cluster-memory-querynode
+  entrypoint: standalone-memory-test
   serviceAccountName: qa-admin
   arguments:
     parameters:
@@ -15,30 +16,32 @@ spec:
       - name: milvus-image-tag
         value: 2.1.0-latest
       - name: milvus-release
-        value: cluster-memory
+        value: standalone-memory
       - name: collection-name
-        value: cluster_query
+        value: standalone_data
   templates:
-    - name: cluster-memory-querynode
+    - name: standalone-memory-test
       inputs:
         parameters:
-          - name: querynode-memory-limit
+          - name: chaos-component
+            value: datanode
+          - name: component-memory-limit
             value: 6Gi
-          - name: chaos-memory-size
+          - name: chaos-memory
             value: 6Gi
       dag:
         tasks:
-          - name: deploy-milvus
+          - name: deploy-standalone
             templateRef:
-              name: deploy-memory-milvus-cluster
-              template: deploy-memory-milvus-cluster
+              name: deploy-memory-milvus-standalone
+              template: deploy-memory-milvus-standalone
             arguments:
               parameters:
-                - name: querynode-memory-limit
-                  value: '{{inputs.parameters.querynode-memory-limit}}'
+                - name: standalone-memory-limit
+                  value: "{{inputs.parameters.component-memory-limit}}"
           - name: init-collection
             dependencies:
-              - deploy-milvus
+              - deploy-standalone
             templateRef:
               name: chaos-milvus-test
               template: milvus-test
@@ -46,16 +49,16 @@ spec:
               parameters:
                 - name: milvus-case
                   value: test_init_collection
-          - name: load-collection
+          - name: milvus-operation
             dependencies:
               - init-collection
             templateRef:
-              name: chaos-milvus-test
-              template: milvus-test
+              name: chaos-milvus-operation
+              template: milvus-operation-test
             arguments:
               parameters:
-                - name: milvus-case
-                  value: test_load_failed
+                - name: chaos-component
+                  value: "{{inputs.parameters.chaos-component}}"
           - name: apply-memory-chaos
             dependencies:
               - init-collection
@@ -65,12 +68,10 @@ spec:
             arguments:
               parameters:
                 - name: memory-size
-                  value: '{{inputs.parameters.chaos-memory-size}}'
-                - name: chaos-component
-                  value: querynode
+                  value: "{{inputs.parameters.chaos-memory}}"
           - name: wait-pods-ready
             dependencies:
-              - load-collection
+              - milvus-operation
               - apply-memory-chaos
             templateRef:
               name: wait-milvus-healthy

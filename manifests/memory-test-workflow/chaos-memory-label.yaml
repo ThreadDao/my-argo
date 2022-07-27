@@ -2,7 +2,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
   name: chaos-memory-stress-by-label
-  namespace: chaos-testing
+  namespace: qa
 spec:
   entrypoint: chaos-memory-stress-by-label
   arguments:
@@ -64,11 +64,11 @@ spec:
           kind: StressChaos
           metadata:
             generateName: '{{inputs.parameters.chaos-component}}-memory-'
-            namespace: chaos-testing
+            namespace: qa
           spec:
             selector:
               namespaces:
-                - default
+                - qa
               labelSelectors:
                 app.kubernetes.io/name: milvus
                 app.kubernetes.io/instance: {{workflow.parameters.milvus-release}}
@@ -103,5 +103,5 @@ spec:
         command: [ sh ]
         source: |
           echo {{inputs.parameters.chaos-name}}
-          kubectl delete stresschaos {{inputs.parameters.chaos-name}} -n chaos-testing
-  serviceAccountName: cluster-chaos-milvus
+          kubectl delete stresschaos {{inputs.parameters.chaos-name}} -n qa
+  serviceAccountName: qa-admin

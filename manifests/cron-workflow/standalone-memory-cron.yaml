@@ -1,0 +1,53 @@
+# Deprecated Deprecated Deprecated
+apiVersion: argoproj.io/v1alpha1
+kind: CronWorkflow
+metadata:
+  name: standalone-memory-datanode-cron
+  namespace: qa
+  labels:
+    workflows.argoproj.io/test: standalone-memory
+spec:
+  schedule: 0 23 * * *
+  timezone: Asia/Shanghai
+  workflowSpec:
+    entrypoint: standalone-memory-test-cron
+    serviceAccountName: qa-admin
+    activeDeadlineSeconds: 7200
+    arguments:
+      parameters:
+        - name: milvus-image-repo
+          value: harbor.milvus.io/dockerhub/milvusdb/milvus-dev
+        - name: milvus-image-tag
+          value: 2.1.0-latest
+        - name: milvus-release
+          value: standalone-memory
+        - name: collection-name
+          value: standalone_data
+    templates:
+      - name: standalone-memory-test-cron
+        steps:
+          - - name: standalone-memory-datanode-test
+              templateRef:
+                name: standalone-memory-datanode
+                template: standalone-memory-datanode
+              onExit: uninstall-standalone
+          - - name: standalone-memory-indexnode-test
+              templateRef:
+                name: standalone-memory-indexnode
+                template: standalone-memory-indexnode
+              onExit: uninstall-standalone
+          - - name: standalone-memory-querynode-test
+              templateRef:
+                name: standalone-memory-querynode
+                template: standalone-memory-querynode
+              onExit: uninstall-standalone
+      - name: uninstall-standalone
+        container:
+          name: main
+          image: bitnami/kubectl:1.21.4
+          command:
+            - /bin/sh
+            - '-c'
+          args:
+            - >-
+              kubectl delete milvus {{workflow.parameters.milvus-release}} -n qa
