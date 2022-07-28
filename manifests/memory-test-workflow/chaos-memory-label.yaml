@@ -22,6 +22,12 @@ spec:
           - name: chaos-mode
             value: all
       steps:
+        - - name: wait
+            template: suspend
+            arguments:
+              parameters:
+                - name: duration
+                  value: 2m
         - - name: chaos-memory-stress
             template: chaos-memory-stress
             arguments:
