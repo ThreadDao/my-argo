@@ -31,7 +31,7 @@ spec:
         parameters:
           - name: standalone-memory-limit
       resource:
-        action: create
+        action: apply
         manifest: |
           apiVersion: milvus.io/v1beta1
           kind: Milvus
