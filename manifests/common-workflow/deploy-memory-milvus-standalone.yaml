@@ -11,6 +11,8 @@ spec:
         parameters:
           - name: standalone-memory-limit
             value: 6Gi
+          - name: standalone-cpu-limit
+            value: 2
       steps:
         - - name: deploy-milvus
             template: deploy-milvus
@@ -18,6 +20,8 @@ spec:
               parameters:
                 - name: standalone-memory-limit
                   value: '{{inputs.parameters.standalone-memory-limit}}'
+                - name: standalone-cpu-limit
+                  value: '{{inputs.parameters.standalone-cpu-limit}}'
         - - name: wait-healthy
             templateRef:
               name: wait-milvus-healthy
@@ -30,6 +34,7 @@ spec:
       inputs:
         parameters:
           - name: standalone-memory-limit
+          - name: standalone-cpu-limit
       resource:
         action: apply
         manifest: |
@@ -37,7 +42,7 @@ spec:
           kind: Milvus
           metadata:
             name: {{workflow.parameters.milvus-release}}-
-            namespace: qa
+            namespace: chaos-testing
           spec:
             mode: standalone
             dependencies:
@@ -57,8 +62,12 @@ spec:
               imagePullPolicy: Always
               standalone:
                 resources:
+                  request:
+                    cpu: 100m
+                    memory: 128Mi
                   limits:
                     memory: {{inputs.parameters.standalone-memory-limit}}
+                    cpu: {{inputs.parameters.standalone-cpu-limit}}
             config:
               log:
                 level: debug

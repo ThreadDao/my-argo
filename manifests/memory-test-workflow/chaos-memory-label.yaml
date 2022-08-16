@@ -70,11 +70,11 @@ spec:
           kind: StressChaos
           metadata:
             generateName: '{{inputs.parameters.chaos-component}}-memory-'
-            namespace: qa
+            namespace: chaos-testing
           spec:
             selector:
               namespaces:
-                - qa
+                - chaos-testing
               labelSelectors:
                 app.kubernetes.io/name: milvus
                 app.kubernetes.io/instance: {{workflow.parameters.milvus-release}}
@@ -109,5 +109,5 @@ spec:
         command: [ sh ]
         source: |
           echo {{inputs.parameters.chaos-name}}
-          kubectl delete stresschaos {{inputs.parameters.chaos-name}} -n qa
+          kubectl delete stresschaos {{inputs.parameters.chaos-name}} -n chaos-testing
   serviceAccountName: qa-admin

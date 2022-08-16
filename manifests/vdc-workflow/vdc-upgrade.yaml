@@ -19,6 +19,8 @@ spec:
                   value: '{{workflow.parameters.upgrade-configmaps}}'
                 - name: client-configmap
                   value: '{{item.client-configmap}}'
+                - name: upgrade-class-mode
+                  value: '{{workflow.parameters.upgrade-class-mode}}'
             withParam: '{{workflow.parameters.configmaps}}'
     - name: uninstall-all
       steps:
@@ -36,6 +38,7 @@ spec:
           - name: server-configmap
           - name: client-configmap
           - name: upgrade-client-configmap
+          - name: upgrade-class-mode
       steps:
         - - name: install-milvus
             template: install-milvus
@@ -61,6 +64,8 @@ spec:
               parameters:
                 - name: server-instance
                   value: '{{inputs.parameters.server-instance}}'
+                - name: upgrade-class-mode
+                  value: '{{inputs.parameters.upgrade-class-mode}}'
         - - name: re-client-test
             template: client-test
             arguments:
@@ -223,6 +228,7 @@ spec:
       inputs:
         parameters:
           - name: server-instance
+          - name: upgrade-class-mode
         artifacts:
           - name: source
             path: /src/benchmark
@@ -246,7 +252,7 @@ spec:
           - /bin/sh
           - '-c'
         args:
-          - ' cd /src/benchmark/milvus_benchmark/vdc/ && export PYTHONPATH=/src/benchmark && python3.8 -W ignore vdc_deploy.py --instance-name={{inputs.parameters.server-instance}} --deploy-mode=upgrade --class-mode={{workflow.parameters.upgrade-class-mode}} --env=UAT'
+          - ' cd /src/benchmark/milvus_benchmark/vdc/ && export PYTHONPATH=/src/benchmark && python3.8 -W ignore vdc_deploy.py --instance-name={{inputs.parameters.server-instance}} --deploy-mode=upgrade --class-mode={{inputs.parameters.upgrade-class-mode}} --env=UAT'
         volumeMounts:
           - name: kube-config
             readOnly: true

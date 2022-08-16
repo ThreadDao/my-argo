@@ -75,7 +75,7 @@ spec:
             cd /src/milvus/tests/python_client && pip install --upgrade
             setuptools && pip install --upgrade pip &&  pip install -r requirements.txt
             && pytest testcases/test_compaction.py -n 4
-            --host={{inputs.parameters.milvus-release}}-milvus.qa.svc.cluster.local
+            --host={{inputs.parameters.milvus-release}}-milvus.chaos-testing.svc.cluster.local
     - name: uninstall-both
       container:
         name: main
@@ -85,7 +85,7 @@ spec:
           - '-c'
         args:
           - >-
-            kubectl delete milvus {{workflow.parameters.cluster-release}} {{workflow.parameters.standalone-release}} -n qa
+            kubectl delete milvus {{workflow.parameters.cluster-release}} {{workflow.parameters.standalone-release}} -n chaos-testing
   entrypoint: compaction-test
   arguments:
     parameters:

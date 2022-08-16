@@ -39,4 +39,4 @@ spec:
             - '-c'
           args:
             - >-
-              kubectl delete milvus {{workflow.parameters.milvus-release}} -n qa
+              kubectl delete milvus {{workflow.parameters.milvus-release}} -n chaos-testing

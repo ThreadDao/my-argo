@@ -32,7 +32,7 @@ spec:
             - '-c'
           args:
             - >-
-              kubectl delete milvus {{workflow.parameters.cluster-release}} {{workflow.parameters.standalone-release}} -n qa
+              kubectl delete milvus {{workflow.parameters.cluster-release}} {{workflow.parameters.standalone-release}} -n chaos-testing
     entrypoint: compaction-test-cron
     onExit: uninstall-all
     arguments:

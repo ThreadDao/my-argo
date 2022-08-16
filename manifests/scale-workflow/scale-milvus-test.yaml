@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
-  name: chaos-milvus-test
+  name: scale-milvus-test
   namespace: qa
 spec:
   templates:
@@ -9,8 +9,6 @@ spec:
       inputs:
         parameters:
           - name: milvus-case
-          - name: replica_num
-            value: '1'
         artifacts:
           - name: source
             path: /src/milvus
@@ -22,6 +20,7 @@ spec:
         artifacts:
           - name: client-logs
             path: /tmp/ci_logs
+      metadata: {}
       container:
         name: ''
         image: 'harbor.milvus.io/qa/fouram:1.0'
@@ -33,14 +32,18 @@ spec:
             cd /src/milvus/tests/python_client && pip install --upgrade
             setuptools && pip install --upgrade pip &&  pip install
             --no-cache-dir -r requirements.txt && pytest
-            chaos/test_chaos_memory_argo.py::TestMilvusChaos::{{inputs.parameters.milvus-case}}
+            scale/test_scale_argo.py::TestMilvusScale::{{inputs.parameters.milvus-case}}
             --host={{workflow.parameters.milvus-release}}-milvus.chaos-testing.svc.cluster.local
-            --collection_name={{workflow.parameters.collection-name}}
-            --replica_num={{inputs.parameters.replica_num}} -v -s
+            -v -s
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "{{inputs.parameters.cpu-limit}}"
+            cpu: "{{inputs.parameters.memory-limit}}"
       activeDeadlineSeconds: 3600
   arguments:
     parameters:
       - name: milvus-release
         value: standalone-memory
-      - name: collection-name
-        value: standalone_memory

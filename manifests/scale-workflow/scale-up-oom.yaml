@@ -1,0 +1,126 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: scale-up-oom
+  namespace: qa
+spec:
+  entrypoint: standalone-scale-up-oom
+  serviceAccountName: qa-admin
+  arguments:
+    parameters:
+      - name: milvus-image-repo
+        value: harbor.milvus.io/dockerhub/milvusdb/milvus-dev
+      - name: milvus-image-tag
+        value: 2.1.0-latest
+      - name: milvus-release
+        value: standalone-memory
+  templates:
+    - name: standalone-scale-up-oom
+      inputs:
+        parameters:
+          - name: standalone-memory-limit
+            value: 9Gi
+          - name: standalone-cpu-limit
+            value: '2'
+          - name: standalone-upgrade-memory
+            value: 16Gi
+          - name: standalone-upgrade-cpu
+            value: '4'
+      dag:
+        tasks:
+          - name: deploy-standalone
+            templateRef:
+              name: deploy-memory-milvus-standalone
+              template: deploy-memory-milvus-standalone
+            arguments:
+              parameters:
+                - name: standalone-memory-limit
+                  value: '{{inputs.parameters.standalone-memory-limit}}'
+                - name: standalone-cpu-limit
+                  value: '{{inputs.parameters.standalone-cpu-limit}}'
+          - name: insert-oom
+            dependencies:
+              - deploy-standalone
+            template: insert-oom
+          - name: upgrade-milvus
+            dependencies:
+              - insert-oom
+            templateRef:
+              name: deploy-memory-milvus-standalone
+              template: deploy-memory-milvus-standalone
+            arguments:
+              parameters:
+                - name: standalone-memory-limit
+                  value: '{{inputs.parameters.standalone-upgrade-memory}}'
+                - name: standalone-cpu-limit
+                  value: '{{inputs.parameters.standalone-upgrade-cpu}}'
+          - name: wait-pods-ready
+            dependencies:
+              - upgrade-milvus
+            templateRef:
+              name: wait-milvus-healthy
+              template: wait-milvus-pods-ready
+            arguments:
+              parameters:
+                - name: milvus-release
+                  value: '{{workflow.parameters.milvus-release}}'
+          - name: oom-collection-check
+            dependencies:
+              - wait-pods-ready
+            templateRef:
+              name: scale-milvus-test
+              template: milvus-test
+            arguments:
+              parameters:
+                - name: milvus-case
+                  value: test_oom_collection_check
+          - name: e2e-test-check
+            dependencies:
+              - wait-pods-ready
+            templateRef:
+              name: e2e-test-check
+              template: e2e-test-check
+            arguments:
+              parameters:
+                - name: milvus-release
+                  value: '{{workflow.parameters.milvus-release}}'
+                - name: milvus-repo
+                  value: 'https://github.com/ThreadDao/milvus.git'
+                - name: milvus-branch
+                  value: master-chaos-argo
+    - name: insert-oom
+      inputs:
+        artifacts:
+          - name: source
+            path: /src/milvus
+            git:
+              repo: 'https://github.com/ThreadDao/milvus.git'
+              revision: master-chaos-argo
+              insecureIgnoreHostKey: true
+      outputs:
+        artifacts:
+          - name: client-logs
+            path: /tmp/ci_logs
+      container:
+        image: 'harbor.milvus.io/qa/fouram:1.0'
+        command:
+          - /bin/sh
+          - '-c'
+        args:
+          - >-
+            cd /src/milvus/tests/python_client && pip install --upgrade
+            setuptools && pip install --upgrade pip &&  pip install
+            --no-cache-dir -r requirements.txt && pytest
+            scale/test_scale_argo.py::TestMilvusScale::test_insert_oom
+            --host={{workflow.parameters.milvus-release}}-milvus.chaos-testing.svc.cluster.local -v -s
+        resources:
+          requests:
+            memory: 128Mi
+            cpu: 100m
+          limits:
+            memory: 8Gi
+            cpu: '8'
+      activeDeadlineSeconds: 3600
+
+
+

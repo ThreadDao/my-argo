@@ -13,14 +13,20 @@ spec:
             value: '1'
           - name: datanode-memory-limit
             value: 6Gi
+          - name: datanode-cpu-limit
+            value: '2'
           - name: indexnode-replicas
             value: '1'
           - name: indexnode-memory-limit
             value: 6Gi
+          - name: indexnode-cpu-limit
+            value: '2'
           - name: querynode-replicas
             value: '1'
           - name: querynode-memory-limit
             value: 6Gi
+          - name: querynode-cpu-limit
+            value: '2'
       steps:
         - - name: deploy-milvus-cluster
             template: deploy-milvus
@@ -30,12 +36,18 @@ spec:
                   value: '{{inputs.parameters.datanode-replicas}}'
                 - name: datanode-memory-limit
                   value: '{{inputs.parameters.datanode-memory-limit}}'
+                - name: datanode-cpu-limit
+                  value: '{{inputs.parameters.datanode-cpu-limit}}'
                 - name: indexnode-replicas
                   value: '{{inputs.parameters.indexnode-replicas}}'
                 - name: indexnode-memory-limit
                   value: '{{inputs.parameters.indexnode-memory-limit}}'
+                - name: indexnode-cpu-limit
+                  value: '{{inputs.parameters.indexnode-cpu-limit}}'
                 - name: querynode-replicas
                   value: '{{inputs.parameters.querynode-replicas}}'
+                - name: querynode-cpu-limit
+                  value: '{{inputs.parameters.querynode-cpu-limit}}'
                 - name: querynode-memory-limit
                   value: '{{inputs.parameters.querynode-memory-limit}}'
         - - name: wait-healthy
@@ -51,9 +63,12 @@ spec:
         parameters:
           - name: datanode-replicas
           - name: datanode-memory-limit
+          - name: datanode-cpu-limit
           - name: indexnode-replicas
           - name: indexnode-memory-limit
+          - name: indexnode-cpu-limit
           - name: querynode-replicas
+          - name: querynode-cpu-limit
           - name: querynode-memory-limit
       resource:
         action: apply
@@ -62,7 +77,7 @@ spec:
           kind: Milvus
           metadata:
             name: {{workflow.parameters.milvus-release}}
-            namespace: qa
+            namespace: chaos-testing
           spec:
             mode: cluster
             dependencies:
@@ -85,22 +100,28 @@ spec:
                 replicas: {{inputs.parameters.querynode-replicas}}
                 resources:
                   requests:
+                    cpu: 100m
                     memory: 128Mi
                   limits:
+                    cpu: {{inputs.parameters.querynode-cpu-limit}}
                     memory: {{inputs.parameters.querynode-memory-limit}}
               dataNode:
                 replicas: {{inputs.parameters.datanode-replicas}}
                 resources:
                   requests:
                     memory: 128Mi
+                    cpu: 100m
                   limits:
+                    cpu: {{inputs.parameters.datanode-cpu-limit}}
                     memory: {{inputs.parameters.datanode-memory-limit}}
               indexNode:
                 replicas: {{inputs.parameters.indexnode-replicas}}
                 resources:
                   requests:
                     memory: 128Mi
+                    cpu: 100m
                   limits:
+                    cpu: {{inputs.parameters.indexnode-cpu-limit}}
                     memory: {{inputs.parameters.indexnode-memory-limit}}
             config:
               log:

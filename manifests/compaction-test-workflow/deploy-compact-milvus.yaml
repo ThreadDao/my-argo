@@ -24,7 +24,7 @@ spec:
           kind: Milvus
           metadata:
             name: {{workflow.parameters.cluster-release}}
-            namespace: qa
+            namespace: chaos-testing
           spec:
             mode: cluster
             dependencies: 
@@ -56,7 +56,7 @@ spec:
           kind: Milvus
           metadata:
             name: {{workflow.parameters.standalone-release}}
-            namespace: qa
+            namespace: chaos-testing
           spec:
             mode: standalone
             dependencies: 

@@ -14,9 +14,9 @@ spec:
         command:
           - sh
         source: |
-          kubectl -n qa wait --for=condition=MilvusReady milvus/{{inputs.parameters.milvus-release}} --timeout 30m
-          kubectl describe milvus {{inputs.parameters.milvus-release}} -n qa
-          kubectl get pods -l app.kubernetes.io/instance={{inputs.parameters.milvus-release}} -n qa
+          kubectl -n chaos-testing wait --for=condition=MilvusReady milvus/{{inputs.parameters.milvus-release}} --timeout 30m
+          kubectl describe milvus {{inputs.parameters.milvus-release}} -n chaos-testing
+          kubectl get pods -l app.kubernetes.io/instance={{inputs.parameters.milvus-release}} -n chaos-testing
     - name: wait-milvus-pods-ready
       inputs:
         parameters:
@@ -26,7 +26,7 @@ spec:
         command:
           - sh
         source: |
-          kubectl wait --for=condition=ready pod -l app.kubernetes.io/instance={{inputs.parameters.milvus-release}} -n qa --timeout 20m
+          kubectl wait --for=condition=ready pod -l app.kubernetes.io/instance={{inputs.parameters.milvus-release}} -n chaos-testing --timeout 20m
     - name: uninstall-both
       inputs:
         parameters:
@@ -40,5 +40,5 @@ spec:
 #        todo delete which milvus release
         args:
           - >-
-            kubectl delete milvus {{inputs.parameters.milvus-release}} {{workflow.parameters.standalone-release}} -n qa
+            kubectl delete milvus {{inputs.parameters.milvus-release}} {{workflow.parameters.standalone-release}} -n chaos-testing
 

@@ -31,4 +31,4 @@ spec:
             cd /src/milvus/tests/python_client && pip install --upgrade
             setuptools && pip install --upgrade pip &&  pip install
             --no-cache-dir -r requirements.txt && pytest
-            testcases/test_e2e.py --host={{inputs.parameters.milvus-release}}-milvus.qa.svc.cluster.local -v -s
+            testcases/test_e2e.py --host={{inputs.parameters.milvus-release}}-milvus.chaos-testing.svc.cluster.local -v -s
