@@ -120,6 +120,16 @@ spec:
           limits:
             memory: 8Gi
             cpu: '8'
+    - name: uninstall-milvus
+      container:
+        name: main
+        image: 'bitnami/kubectl:1.21.4'
+        command:
+          - /bin/sh
+          - '-c'
+        args:
+          - >-
+            kubectl delete milvus {{workflow.parameters.milvus-release}} -n chaos-testing
       activeDeadlineSeconds: 3600
 
 
