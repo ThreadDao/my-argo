@@ -16,11 +16,6 @@ spec:
               repo: 'https://github.com/ThreadDao/milvus.git'
               revision: master-chaos-argo
               insecureIgnoreHostKey: true
-      outputs:
-        artifacts:
-          - name: client-logs
-            path: /tmp/ci_logs
-      metadata: {}
       container:
         name: ''
         image: 'harbor.milvus.io/qa/fouram:1.0'
@@ -35,14 +30,7 @@ spec:
             scale/test_scale_argo.py::TestMilvusScale::{{inputs.parameters.milvus-case}}
             --host={{workflow.parameters.milvus-release}}-milvus.chaos-testing.svc.cluster.local
             -v -s
-        resources:
-          requests:
-            memory: "128Mi"
-            cpu: "100m"
-          limits:
-            memory: "{{inputs.parameters.cpu-limit}}"
-            cpu: "{{inputs.parameters.memory-limit}}"
-      activeDeadlineSeconds: 3600
+      activeDeadlineSeconds: 7200
   arguments:
     parameters:
       - name: milvus-release
