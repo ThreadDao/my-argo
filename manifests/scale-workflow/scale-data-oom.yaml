@@ -1,0 +1,137 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: scale-up-oom
+  namespace: qa
+spec:
+  templates:
+    - name: insert-oom
+      inputs:
+        artifacts:
+          - name: source
+            path: /src/milvus
+            git:
+              repo: 'https://github.com/ThreadDao/milvus.git'
+              revision: master-chaos-argo
+              insecureIgnoreHostKey: true
+      outputs:
+        artifacts:
+          - name: client-logs
+            path: /tmp/ci_logs
+      container:
+        name: ''
+        image: 'harbor.milvus.io/qa/fouram:1.0'
+        command:
+          - /bin/sh
+          - '-c'
+        args:
+          - >-
+            cd /src/milvus/tests/python_client && pip install --upgrade
+            setuptools && pip install --upgrade pip &&  pip install
+            --no-cache-dir -r requirements.txt && pytest
+            scale/test_scale_argo.py::TestMilvusScale::test_insert_oom
+            --host={{workflow.parameters.milvus-release}}-milvus.chaos-testing.svc.cluster.local
+            -v -s
+        resources:
+          limits:
+            cpu: '8'
+            memory: 12Gi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+    - name: uninstall-milvus
+      container:
+        name: main
+        image: 'bitnami/kubectl:1.21.4'
+        command:
+          - /bin/sh
+          - '-c'
+        args:
+          - >-
+            kubectl delete milvus {{workflow.parameters.milvus-release}} -n
+            chaos-testing
+        resources: {}
+    - name: standalone-scale-up-oom
+      inputs:
+        parameters:
+          - name: standalone-memory-limit
+            value: 9Gi
+          - name: standalone-cpu-limit
+            value: '2'
+          - name: standalone-upgrade-memory
+            value: 16Gi
+          - name: standalone-upgrade-cpu
+            value: '4'
+      dag:
+        tasks:
+          - name: deploy-standalone
+            arguments:
+              parameters:
+                - name: standalone-memory-limit
+                  value: '{{inputs.parameters.standalone-memory-limit}}'
+                - name: standalone-cpu-limit
+                  value: '{{inputs.parameters.standalone-cpu-limit}}'
+            templateRef:
+              name: deploy-memory-milvus-standalone
+              template: deploy-memory-milvus-standalone
+          - name: insert-oom
+            template: insert-oom
+            dependencies:
+              - deploy-standalone
+          - name: upgrade-milvus
+            arguments:
+              parameters:
+                - name: standalone-memory-limit
+                  value: '{{inputs.parameters.standalone-upgrade-memory}}'
+                - name: standalone-cpu-limit
+                  value: '{{inputs.parameters.standalone-upgrade-cpu}}'
+            templateRef:
+              name: deploy-memory-milvus-standalone
+              template: deploy-memory-milvus-standalone
+            dependencies:
+              - insert-oom
+          - name: wait-pods-ready
+            arguments:
+              parameters:
+                - name: milvus-release
+                  value: '{{workflow.parameters.milvus-release}}'
+            templateRef:
+              name: wait-milvus-healthy
+              template: wait-milvus-pods-ready
+            dependencies:
+              - upgrade-milvus
+          - name: oom-collection-check
+            arguments:
+              parameters:
+                - name: milvus-case
+                  value: test_oom_collection_check
+            templateRef:
+              name: scale-milvus-test
+              template: milvus-test
+            dependencies:
+              - wait-pods-ready
+          - name: e2e-test-check
+            arguments:
+              parameters:
+                - name: milvus-release
+                  value: '{{workflow.parameters.milvus-release}}'
+                - name: milvus-repo
+                  value: 'https://github.com/ThreadDao/milvus.git'
+                - name: milvus-branch
+                  value: master-chaos-argo
+            templateRef:
+              name: e2e-test-check
+              template: e2e-test-check
+            dependencies:
+              - wait-pods-ready
+  entrypoint: standalone-scale-up-oom
+  arguments:
+    parameters:
+      - name: milvus-image-repo
+        value: harbor.milvus.io/dockerhub/milvusdb/milvus
+      - name: milvus-image-tag
+        value: 2.1.0-latest
+      - name: milvus-release
+        value: standalone-oom
+  serviceAccountName: qa-admin
+  onExit: uninstall-milvus
