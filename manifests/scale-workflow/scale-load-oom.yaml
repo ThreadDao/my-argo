@@ -1,59 +1,64 @@
-# currently after index oom with HNSW index, load failed due to enough memory
+# currently load without oom, need to adjust data size and index
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
-  name: scale-index-oom
+  name: scale-load-oom
   namespace: qa
 spec:
   templates:
-    - name: standalone-scale-index-oom
+    - name: uninstall-milvus
+      container:
+        name: main
+        image: 'bitnami/kubectl:1.21.4'
+        command:
+          - /bin/sh
+          - '-c'
+        args:
+          - >-
+            kubectl delete milvus {{workflow.parameters.milvus-release}} -n
+            chaos-testing
+    - name: cluster-scale-load-oom
       inputs:
         parameters:
-          - name: standalone-memory-limit
-            value: 5Gi
-          - name: standalone-cpu-limit
-            value: '2'
-          - name: standalone-upgrade-memory
-            value: 16Gi
-          - name: standalone-upgrade-cpu
-            value: '4'
+          - name: querynode-memory-limit
+            value: 4Gi
+          - name: querynode-upgrade-replicas
+            value: 2
       dag:
         tasks:
-          - name: deploy-standalone
+          - name: deploy-cluster
             arguments:
               parameters:
-                - name: standalone-memory-limit
-                  value: '{{inputs.parameters.standalone-memory-limit}}'
-                - name: standalone-cpu-limit
-                  value: '{{inputs.parameters.standalone-cpu-limit}}'
+                - name: querynode-memory-limit
+                  value: '{{inputs.parameters.querynode-memory-limit}}'
             templateRef:
-              name: deploy-memory-milvus-standalone
-              template: deploy-memory-milvus-standalone
-          - name: index-oom
+              name: deploy-memory-milvus-cluster
+              template: deploy-memory-milvus-cluster
+          - name: init-collection-load
             dependencies:
-              - deploy-standalone
+              - deploy-cluster
             templateRef:
               name: scale-milvus-test
               template: milvus-test
             arguments:
               parameters:
                 - name: milvus-case
-                  value: test_index_oom
-          - name: upgrade-milvus
+                  value: test_load_oom
+          - name: scale-out-querynode
             dependencies:
-              - index-oom
+              - init-collection-load
             templateRef:
-              name: deploy-memory-milvus-standalone
-              template: deploy-memory-milvus-standalone
+              name: deploy-memory-milvus-cluster
+              template: deploy-memory-milvus-cluster
             arguments:
               parameters:
-                - name: standalone-memory-limit
-                  value: '{{inputs.parameters.standalone-upgrade-memory}}'
-                - name: standalone-cpu-limit
-                  value: '{{inputs.parameters.standalone-upgrade-cpu}}'
+                - name: querynode-replicas
+                  value: '{{inputs.parameters.querynode-upgrade-replicas}}'
+                - name: querynode-memory-limit
+                  value: '{{inputs.parameters.querynode-memory-limit}}'
           - name: wait-pods-ready
             dependencies:
-              - upgrade-milvus
+              - scale-out-querynode
             templateRef:
               name: wait-milvus-healthy
               template: wait-milvus-pods-ready
@@ -61,7 +66,7 @@ spec:
               parameters:
                 - name: milvus-release
                   value: '{{workflow.parameters.milvus-release}}'
-          - name: oom-collection-check
+          - name: load-collection-check
             dependencies:
               - wait-pods-ready
             templateRef:
@@ -70,7 +75,7 @@ spec:
             arguments:
               parameters:
                 - name: milvus-case
-                  value: test_index_oom_collection_check
+                  value: test_load_oom_collection_check
           - name: e2e-test-check
             dependencies:
               - wait-pods-ready
@@ -85,13 +90,14 @@ spec:
                   value: 'https://github.com/ThreadDao/milvus.git'
                 - name: milvus-branch
                   value: master-chaos-argo
-  entrypoint: standalone-scale-index-oom
+  entrypoint: scluster-scale-load-oom
   arguments:
     parameters:
       - name: milvus-image-repo
-        value: harbor.milvus.io/dockerhub/milvusdb/milvus-dev
+        value: harbor.milvus.io/dockerhub/milvusdb/milvus
       - name: milvus-image-tag
         value: 2.1.0-latest
       - name: milvus-release
-        value: standalone-index
+        value: clusetr-load
   serviceAccountName: qa-admin
+  onExit: uninstall-milvus

@@ -1,0 +1,36 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: upgrade-milvus-test
+  namespace: qa
+spec:
+  templates:
+    - name: milvus-test
+      inputs:
+        parameters:
+          - name: milvus-case
+        artifacts:
+          - name: source
+            path: /src/milvus
+            git:
+              repo: 'https://github.com/ThreadDao/milvus.git'
+              revision: master-chaos-argo
+              insecureIgnoreHostKey: true
+      container:
+        name: ''
+        image: 'harbor.milvus.io/qa/fouram:1.0'
+        command:
+          - /bin/sh
+          - '-c'
+        args:
+          - >-
+            cd /src/milvus/tests/python_client && pip install --upgrade
+            setuptools && pip install --upgrade pip &&  pip install
+            --no-cache-dir -r requirements.txt && pytest
+            scale/test_upgrade_argo.py::TestUpgradeIndex::{{inputs.parameters.milvus-case}}
+            --host={{workflow.parameters.milvus-release}}-milvus.chaos-testing.svc.cluster.local
+            -v -s
+  arguments:
+    parameters:
+      - name: milvus-release
+        value: standalone-memory

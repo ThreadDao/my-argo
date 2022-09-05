@@ -4,11 +4,12 @@ metadata:
   name: deploy-memory-milvus-cluster
   namespace: qa
 spec:
-  entrypoint: deploy-memory-milvus-cluster
   templates:
     - name: deploy-memory-milvus-cluster
       inputs:
         parameters:
+          - name: milvus-image-tag
+            value: '{{workflow.parameters.milvus-image-tag}}'
           - name: datanode-replicas
             value: '1'
           - name: datanode-memory-limit
@@ -18,20 +19,24 @@ spec:
           - name: indexnode-replicas
             value: '1'
           - name: indexnode-memory-limit
-            value: 6Gi
+            value: 8Gi
           - name: indexnode-cpu-limit
-            value: '2'
+            value: '4'
           - name: querynode-replicas
             value: '1'
           - name: querynode-memory-limit
-            value: 6Gi
+            value: 8Gi
           - name: querynode-cpu-limit
-            value: '2'
+            value: '4'
+      outputs: {}
+      metadata: {}
       steps:
         - - name: deploy-milvus-cluster
             template: deploy-milvus
             arguments:
               parameters:
+                - name: milvus-image-tag
+                  value: '{{inputs.parameters.milvus-image-tag}}'
                 - name: datanode-replicas
                   value: '{{inputs.parameters.datanode-replicas}}'
                 - name: datanode-memory-limit
@@ -51,16 +56,17 @@ spec:
                 - name: querynode-memory-limit
                   value: '{{inputs.parameters.querynode-memory-limit}}'
         - - name: wait-healthy
-            templateRef:
-              name: wait-milvus-healthy
-              template: wait-milvus-healthy
             arguments:
               parameters:
                 - name: milvus-release
                   value: '{{workflow.parameters.milvus-release}}'
+            templateRef:
+              name: wait-milvus-healthy
+              template: wait-milvus-healthy
     - name: deploy-milvus
       inputs:
         parameters:
+          - name: milvus-image-tag
           - name: datanode-replicas
           - name: datanode-memory-limit
           - name: datanode-cpu-limit
@@ -70,6 +76,8 @@ spec:
           - name: querynode-replicas
           - name: querynode-cpu-limit
           - name: querynode-memory-limit
+      outputs: {}
+      metadata: {}
       resource:
         action: apply
         manifest: |
@@ -94,7 +102,7 @@ spec:
                   deletionPolicy: Delete
                   pvcDeletion: true
             components:
-              image: {{workflow.parameters.milvus-image-repo}}:{{workflow.parameters.milvus-image-tag}}
+              image: {{workflow.parameters.milvus-image-repo}}:{{inputs.parameters.milvus-image-tag}}
               imagePullPolicy: Always
               queryNode:
                 replicas: {{inputs.parameters.querynode-replicas}}
@@ -126,10 +134,11 @@ spec:
             config:
               log:
                 level: debug
+  entrypoint: deploy-memory-milvus-cluster
   arguments:
     parameters:
       - name: milvus-image-repo
-        value: harbor.milvus.io/dockerhub/milvusdb/milvus-dev
+        value: harbor.milvus.io/dockerhub/milvusdb/milvus
       - name: milvus-image-tag
         value: 2.1.0-latest
       - name: milvus-release
