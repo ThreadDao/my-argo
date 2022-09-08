@@ -1,0 +1,101 @@
+# currently after index oom with HNSW index, load failed due to enough memory
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: cluster-scale-index-oom
+  namespace: qa
+spec:
+  templates:
+    - name: cluster-scale-index-oom
+      inputs:
+        parameters:
+          - name: indexnode-memory-limit
+            value: 5Gi
+          - name: indexnode-cpu-limit
+            value: '2'
+          - name: indexnode-upgrade-memory
+            value: 16Gi
+          - name: indexnode-upgrade-cpu
+            value: '4'
+      dag:
+        tasks:
+          - name: deploy-cluster
+            arguments:
+              parameters:
+                - name: indexnode-memory-limit
+                  value: '{{inputs.parameters.indexnode-memory-limit}}'
+                - name: indexnode-cpu-limit
+                  value: '{{inputs.parameters.indexnode-cpu-limit}}'
+                - name: querynode-memory-limit
+                  value: '4Gi'
+            templateRef:
+              name: deploy-memory-milvus-cluster
+              template: deploy-memory-milvus-cluster
+          - name: index-oom
+            dependencies:
+              - deploy-cluster
+            templateRef:
+              name: scale-milvus-test
+              template: milvus-test
+            arguments:
+              parameters:
+                - name: milvus-case
+                  value: test_index_oom
+          - name: upgrade-milvus
+            dependencies:
+              - index-oom
+            templateRef:
+              name: deploy-memory-milvus-cluster
+              template: deploy-memory-milvus-cluster
+            arguments:
+              parameters:
+                - name: indexnode-memory-limit
+                  value: '{{inputs.parameters.indexnode-upgrade-memory}}'
+                - name: indexnode-memory-limit
+                  value: '{{inputs.parameters.indexnode-upgrade-cpu}}'
+                - name: querynode-memory-limit
+                  value: '16Gi'
+          - name: wait-pods-ready
+            dependencies:
+              - upgrade-milvus
+            templateRef:
+              name: wait-milvus-healthy
+              template: wait-milvus-pods-ready
+            arguments:
+              parameters:
+                - name: milvus-release
+                  value: '{{workflow.parameters.milvus-release}}'
+          - name: oom-collection-check
+            dependencies:
+              - wait-pods-ready
+            templateRef:
+              name: scale-milvus-test
+              template: milvus-test
+            arguments:
+              parameters:
+                - name: milvus-case
+                  value: test_index_oom_collection_check
+          - name: e2e-test-check
+            dependencies:
+              - wait-pods-ready
+            templateRef:
+              name: e2e-test-check
+              template: e2e-test-check
+            arguments:
+              parameters:
+                - name: milvus-release
+                  value: '{{workflow.parameters.milvus-release}}'
+                - name: milvus-repo
+                  value: 'https://github.com/ThreadDao/milvus.git'
+                - name: milvus-branch
+                  value: master-chaos-argo
+  entrypoint: cluster-scale-index-oom
+  arguments:
+    parameters:
+      - name: milvus-image-repo
+        value: harbor.milvus.io/dockerhub/milvusdb/milvus
+      - name: milvus-image-tag
+        value: master-latest
+      - name: milvus-release
+        value: cluster-index-oom
+  serviceAccountName: qa-admin
