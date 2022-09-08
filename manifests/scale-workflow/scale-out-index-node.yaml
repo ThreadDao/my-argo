@@ -1,0 +1,134 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: scale-out-index-node
+  namespace: qa
+spec:
+  templates:
+    - name: scale-out-index-node
+      inputs:
+        parameters:
+          - name: indexnode-memory-limit
+            value: 6Gi
+          - name: indexnode-cpu-limit
+            value: '2'
+          - name: indexnode-upgrade-replicas
+            value: '3'
+      dag:
+        tasks:
+          - name: deploy-cluster
+            arguments:
+              parameters:
+                - name: indexnode-memory-limit
+                  value: '{{inputs.parameters.indexnode-memory-limit}}'
+                - name: indexnode-cpu-limit
+                  value: '{{inputs.parameters.indexnode-cpu-limit}}'
+                - name: querynode-memory-limit
+                  value: 8Gi
+            templateRef:
+              name: deploy-memory-milvus-cluster
+              template: deploy-memory-milvus-cluster
+          - name: init-collection
+            arguments:
+              parameters:
+                - name: milvus-case
+                  value: test_init_scale_collection
+            templateRef:
+              name: scale-milvus-test
+              template: milvus-test
+            dependencies:
+              - deploy-cluster
+          - name: create-index
+            arguments:
+              parameters:
+                - name: milvus-case
+                  value: test_index_oom_collection_check
+            templateRef:
+              name: scale-milvus-test
+              template: milvus-test
+            dependencies:
+              - init-collection
+          - name: wait-while
+            arguments:
+              parameters:
+                - name: duration
+                  value: 5m
+            templateRef:
+              name: chaos-memory-stress-by-label
+              template: suspend
+            dependencies:
+              - init-collection
+          - name: scale-out-indexnode
+            arguments:
+              parameters:
+                - name: indexnode-memory-limit
+                  value: '{{inputs.parameters.indexnode-memory-limit}}'
+                - name: indexnode-cpu-limit
+                  value: '{{inputs.parameters.indexnode-cpu-limit}}'
+                - name: querynode-memory-limit
+                  value: 8Gi
+                - name: indexnode-replicas
+                  value: '{{inputs.parameters.indexnode-upgrade-replicas}}'
+            templateRef:
+              name: deploy-memory-milvus-cluster
+              template: deploy-memory-milvus-cluster
+            dependencies:
+              - wait-while
+          - name: wait-pods-ready
+            arguments:
+              parameters:
+                - name: milvus-release
+                  value: '{{workflow.parameters.milvus-release}}'
+            templateRef:
+              name: wait-milvus-healthy
+              template: wait-milvus-pods-ready
+            dependencies:
+              - create-index
+              - scale-out-indexnode
+          - name: scale-collection-check
+            arguments:
+              parameters:
+                - name: milvus-case
+                  value: test_load_oom_collection_check
+            templateRef:
+              name: scale-milvus-test
+              template: milvus-test
+            dependencies:
+              - wait-pods-ready
+          - name: e2e-test-check
+            arguments:
+              parameters:
+                - name: milvus-release
+                  value: '{{workflow.parameters.milvus-release}}'
+                - name: milvus-repo
+                  value: 'https://github.com/ThreadDao/milvus.git'
+                - name: milvus-branch
+                  value: master-chaos-argo
+            templateRef:
+              name: e2e-test-check
+              template: e2e-test-check
+            dependencies:
+              - wait-pods-ready
+    - name: uninstall-milvus
+      container:
+        name: main
+        image: 'bitnami/kubectl:1.21.4'
+        command:
+          - /bin/sh
+          - '-c'
+        args:
+          - >-
+            kubectl delete milvus {{workflow.parameters.milvus-release}} -n
+            chaos-testing
+        resources: {}
+  entrypoint: scale-out-index-node
+  arguments:
+    parameters:
+      - name: milvus-image-repo
+        value: harbor.milvus.io/dockerhub/milvusdb/milvus
+      - name: milvus-image-tag
+        value: master-latest
+      - name: milvus-release
+        value: scale-out-index
+  serviceAccountName: qa-admin
+  onExit: uninstall-milvus
