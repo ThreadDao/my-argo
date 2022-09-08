@@ -1,3 +1,5 @@
+# describe pod
+# kubectl get pods -l app.kubernetes.io/instance={{inputs.parameters.milvus-release}},app.kubernetes.io/component=standalone -n chaos-testing | awk 'NR >= 2 {print $1}' | xargs kubectl describe pod -n chaos-testing
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
