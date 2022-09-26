@@ -1,0 +1,77 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: vdc-delete
+  namespace: qa
+spec:
+  entrypoint: vdc-delete
+  arguments:
+    parameters:
+      - name: activeDeadlineSeconds
+        value: '1036800'
+      - name: test-client-branch
+        value: vdc
+      - name: server-instances
+        value: '[{"instance":"vdc-ci-test-g7jk8-1"}, {"instance":"vdc-ci-test-fglkw-1"}, {"instance": "vdc-ci-test-h6zbh-1"},  {"instance": "vdc-ci-test-mxpkh-1"}, {"instance": "vdc-ci-test-zm9lk-1"}]'
+#          [
+#            { "instance": "vdc-ci-test-g7jk8-1"},
+#            { "instance": "vdc-ci-test-fglkw-1"},
+#            { "instance": "vdc-ci-test-h6zbh-1"},
+#            { "instance": "vdc-ci-test-mxpkh-1"},
+#            { "instance": "vdc-ci-test-zm9lk-1"}
+#          ]
+      - name: test-sdk-version
+        value: 2.2.0.dev30
+  volumes:
+    - name: kube-config
+      secret:
+        secretName: qa-admin-config
+  templates:
+    - name: vdc-delete
+      steps:
+        - - name: uninstall-milvus
+            template: uninstall-milvus
+            arguments:
+              parameters:
+                - name: server-instance
+                  value: '{{item.instance}}'
+            withParam: '{{workflow.parameters.server-instances}}'
+    - name: uninstall-milvus
+      inputs:
+        parameters:
+            - name: server-instance
+        artifacts:
+          - name: benchmark-src
+            path: /src/benchmark
+            git:
+              repo: 'git@github.com:zilliztech/milvus_benchmark.git'
+              revision: '{{workflow.parameters.test-client-branch}}'
+              sshPrivateKeySecret:
+                name: github-key
+                key: ssh-private-key
+              insecureIgnoreHostKey: true
+      nodeSelector:
+        node-role: test-client
+      container:
+        name: ''
+        image: 'harbor-ap1.zilliz.cc/qa/fouram:1.1'
+        command:
+          - /bin/sh
+          - '-c'
+        args:
+          - ' cd /src/benchmark &&  python3.8 -m pip install -i https://pypi.doubanio.com/simple/  --trusted-host pypi.doubanio.com --upgrade pip && python3.8 -m pip install -r requirements_3.8.txt -i https://pypi.doubanio.com/simple/ --trusted-host pypi.doubanio.com && cd /src/benchmark/milvus_benchmark/vdc/ && export PYTHONPATH=/src/benchmark && python3.8 -W ignore vdc_deploy.py --instance-name={{inputs.parameters.server-instance}} --deploy-mode=delete --env=UAT '
+        volumeMounts:
+          - name: kube-config
+            readOnly: true
+            mountPath: /root/.kube
+          - name: db-data-path
+            mountPath: /test
+      volumes:
+        - name: db-data-path
+          persistentVolumeClaim:
+            claimName: qa-pvc
+      tolerations:
+        - key: node-role
+          operator: Equal
+          value: vdc-test
+          effect: NoSchedule
