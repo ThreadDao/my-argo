@@ -1,0 +1,33 @@
+apiVersion: chaos-mesh.org/v1alpha1
+kind: Workflow
+metadata:
+  generateName: chaos-index-pool-
+  namespace: chaos-testing
+spec:
+  entry: entry
+  templates:
+    - name: entry
+      templateType: Serial
+      deadline: 60m
+      children:
+        - inject-pod-kill
+    - name: inject-pod-kill
+      templateType: Schedule
+      schedule:
+        schedule: '*/10 * * * *'
+        startingDeadlineSeconds: 60
+        concurrencyPolicy: Forbid
+        historyLimit: 1
+        type: PodChaos
+        podChaos:
+          selector:
+            namespaces:
+              - index-pool
+            labelSelectors:
+              vectordb/index-cluster: disk-pool1
+#              app.kubernetes.io/name: index-cluster-worker
+#          mode: fixed-percent
+#          value: "50"
+          mode: all
+          action: pod-kill
+          gracePeriod: 0

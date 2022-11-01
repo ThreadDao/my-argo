@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  generateName: go-run-
+  namespace: qa
+spec:
+  containers:
+    - name: main
+      image: 'golang:1.18.3-buster'
+      command: [ "/bin/bash", "-c", "--" ]
+      args: [ "while true; do sleep 30; done;" ]

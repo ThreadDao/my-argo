@@ -1,0 +1,76 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: chaos-index-pool
+  namespace: qa
+spec:
+  templates:
+    - name: chaos-index-pool
+      inputs: {}
+      outputs: {}
+      metadata: {}
+      steps:
+        - - name: call-chaos
+            template: inject-chaos-pod-kill
+            arguments:
+              parameters:
+                - name: deadline
+                  value: '{{workflow.parameters.deadline}}'
+                - name: index-pool
+                  value: '{{workflow.parameters.index-pool}}'
+    - name: inject-chaos-pod-kill
+      inputs:
+        parameters:
+          - name: deadline
+          - name: index-pool
+      outputs: {}
+      metadata: {}
+      resource:
+        action: create
+        volumeMounts:
+          - name: kube-config
+            readOnly: true
+            mountPath: /root/.kube
+        manifest: |
+          apiVersion: chaos-mesh.org/v1alpha1
+          kind: Workflow
+          metadata:
+            generateName: pool-pod-kill-
+            namespace: chaos-testing
+          spec:
+            entry: entry
+            templates:
+              - name: entry
+                templateType: Serial
+                deadline: {{inputs.parameters.deadline}}
+                children:
+                  - inject-pods-kill
+              - name: inject-pods-kill
+                templateType: Schedule
+                schedule:
+                  schedule: '*/2 * * * *'
+                  startingDeadlineSeconds: 60
+                  concurrencyPolicy: Forbid
+                  historyLimit: 1
+                  type: PodChaos
+                  podChaos:
+                    selector:
+                      namespaces:
+                        - index-pool
+                      labelSelectors:
+                        vectordb/index-cluster: '{{inputs.parameters.index-pool}}'
+                        app.kubernetes.io/name: index-cluster-worker
+                    mode: all
+                    action: pod-kill
+                    gracePeriod: 0
+  entrypoint: chaos-index-pool
+  arguments:
+    parameters:
+      - name: deadline
+        value: 10m
+      - name: index-pool
+        value: pool-z6
+  volumes:
+    - name: kube-config
+      secret:
+        secretName: qa-admin-config

@@ -90,10 +90,11 @@ spec:
                 name: github-key
                 key: ssh-private-key
               insecureIgnoreHostKey: true
-      outputs: {}
       nodeSelector:
         node-role: test-client
-      metadata: {}
+      metadata:
+        annotations:
+          cluster-autoscaler.kubernetes.io/safe-to-evict: 'false'
       container:
         name: ''
         image: 'harbor-ap1.zilliz.cc/qa/fouram:1.1'
@@ -101,8 +102,7 @@ spec:
           - /bin/sh
           - '-c'
         args:
-          - ' cd /src/benchmark/milvus_benchmark/vdc/ && export PYTHONPATH=/src/benchmark && python3.8 -W ignore vdc_deploy.py --instance-name={{inputs.parameters.server-instance}} --deploy-mode=delete --env=UAT '
-        resources: {}
+          - ' cd /src/benchmark &&  python3.8 -m pip install -i https://pypi.doubanio.com/simple/  --trusted-host pypi.doubanio.com --upgrade pip && python3.8 -m pip install -r requirements_3.8.txt -i https://pypi.doubanio.com/simple/ --trusted-host pypi.doubanio.com && cd /src/benchmark/milvus_benchmark/vdc/ && export PYTHONPATH=/src/benchmark && python3.8 -W ignore vdc_deploy.py --instance-name={{inputs.parameters.server-instance}} --deploy-mode=delete --env=UAT '
         volumeMounts:
           - name: kube-config
             readOnly: true
@@ -133,10 +133,11 @@ spec:
                 name: github-key
                 key: ssh-private-key
               insecureIgnoreHostKey: true
-      outputs: {}
       nodeSelector:
         node-role: test-client
-      metadata: {}
+      metadata:
+        annotations:
+          cluster-autoscaler.kubernetes.io/safe-to-evict: 'false'
       container:
         name: ''
         image: 'harbor-ap1.zilliz.cc/qa/fouram:1.1'
@@ -144,8 +145,7 @@ spec:
           - /bin/sh
           - '-c'
         args:
-          - ' cd /src/benchmark/milvus_benchmark/vdc/ && cp /configmap-server/config.yaml . && export PYTHONPATH=/src/benchmark && python3.8 -W ignore vdc_deploy.py --instance-name={{inputs.parameters.server-instance}} --image-tag={{workflow.parameters.milvus-image-tag}} --deploy-params=config.yaml --deploy-mode=install --env=UAT '
-        resources: {}
+          - ' cd /src/benchmark &&  python3.8 -m pip install -i https://pypi.doubanio.com/simple/  --trusted-host pypi.doubanio.com --upgrade pip && python3.8 -m pip install -r requirements_3.8.txt -i https://pypi.doubanio.com/simple/ --trusted-host pypi.doubanio.com && cd /src/benchmark/milvus_benchmark/vdc/ && cp /configmap-server/config.yaml . && export PYTHONPATH=/src/benchmark && python3.8 -W ignore vdc_deploy.py --instance-name={{inputs.parameters.server-instance}} --db-version-prefix={{workflow.parameters.db-version-prefix}} --deploy-params=config.yaml --deploy-mode=install --env=UAT '
         volumeMounts:
           - name: kube-config
             readOnly: true
@@ -182,10 +182,11 @@ spec:
                 name: github-key
                 key: ssh-private-key
               insecureIgnoreHostKey: true
-      outputs: {}
       nodeSelector:
         node-role: test-client
-      metadata: {}
+      metadata:
+        annotations:
+          cluster-autoscaler.kubernetes.io/safe-to-evict: 'false'
       container:
         name: ''
         image: 'harbor-ap1.zilliz.cc/qa/fouram:1.1'
@@ -235,24 +236,23 @@ spec:
             git:
               repo: 'git@github.com:zilliztech/milvus_benchmark.git'
               revision: '{{workflow.parameters.test-client-branch}}'
-              insecureIgnoreHostKey: true
               sshPrivateKeySecret:
                 name: github-key
                 key: ssh-private-key
+              insecureIgnoreHostKey: true
       nodeSelector:
         node-role: test-client
-      tolerations:
-        - key: node-role
-          operator: Equal
-          value: vdc-test
-          effect: NoSchedule
+      metadata:
+        annotations:
+          cluster-autoscaler.kubernetes.io/safe-to-evict: 'false'
       container:
+        name: ''
         image: 'harbor-ap1.zilliz.cc/qa/fouram:1.1'
         command:
           - /bin/sh
           - '-c'
         args:
-          - ' cd /src/benchmark/milvus_benchmark/vdc/ && export PYTHONPATH=/src/benchmark && python3.8 -W ignore vdc_deploy.py --instance-name={{inputs.parameters.server-instance}} --deploy-mode=upgrade --class-mode={{inputs.parameters.upgrade-class-mode}} --env=UAT'
+          - ' cd /src/benchmark &&  python3.8 -m pip install -i https://pypi.doubanio.com/simple/  --trusted-host pypi.doubanio.com --upgrade pip && python3.8 -m pip install -r requirements_3.8.txt -i https://pypi.doubanio.com/simple/ --trusted-host pypi.doubanio.com && cd /src/benchmark/milvus_benchmark/vdc/ && export PYTHONPATH=/src/benchmark && python3.8 -W ignore vdc_deploy.py --instance-name={{inputs.parameters.server-instance}} --deploy-mode=upgrade --class-mode={{inputs.parameters.upgrade-class-mode}} --env=UAT && echo "Time sleep:{{workflow.parameters.time-sleep}}" && sleep {{workflow.parameters.time-sleep}} '
         volumeMounts:
           - name: kube-config
             readOnly: true
@@ -263,23 +263,30 @@ spec:
         - name: db-data-path
           persistentVolumeClaim:
             claimName: qa-pvc
+      tolerations:
+        - key: node-role
+          operator: Equal
+          value: vdc-test
+          effect: NoSchedule
   entrypoint: benchmark-loop
   arguments:
     parameters:
       - name: activeDeadlineSeconds
         value: '1036800'
-      - name: milvus-image-tag
-        value: 936da41f
+      - name: db-version-prefix
+        value: v2.2.0-
       - name: test-client-branch
         value: vdc
       - name: configmaps
-        value: ' [ {"instanceId":"1", "server-configmap": "vdc-standalone-small", "client-configmap": "vdc-upgrade-client-locust-random" } ]'
+        value: ' [ {"instanceId":"1", "server-configmap": "vdc-standalone-1cu", "client-configmap": "vdc-upgrade-client-locust-random" } ]'
       - name: upgrade-configmaps
-        value: "vdc-upgrade-client-locust-random-concurrent"
+        value: vdc-upgrade-client-locust-random-concurrent
       - name: upgrade-class-mode
-        value: Middle
+        value: Class2CU
       - name: test-sdk-version
-        value: 2.1.0.dev103
+        value: 2.2.0.dev40
+      - name: time-sleep
+        value: 10s
   volumes:
     - name: kube-config
       secret:

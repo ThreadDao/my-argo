@@ -66,6 +66,9 @@ spec:
             path: /tmp/endpoint-pwd.txt
       nodeSelector:
         node-role: test-client
+      metadata:
+        annotations:
+          cluster-autoscaler.kubernetes.io/safe-to-evict: 'false'
       container:
         name: ''
         image: 'harbor-ap1.zilliz.cc/qa/fouram:1.1'
@@ -73,7 +76,7 @@ spec:
           - /bin/sh
           - '-c'
         args:
-          - ' cd /src/benchmark &&  python3.8 -m pip install -i https://pypi.doubanio.com/simple/  --trusted-host pypi.doubanio.com --upgrade pip && python3.8 -m pip install -r requirements_3.8.txt -i https://pypi.doubanio.com/simple/ --trusted-host pypi.doubanio.com && cd /src/benchmark/milvus_benchmark/vdc/ && cp /configmap-server/config.yaml . && export PYTHONPATH=/src/benchmark && python3.8 -W ignore vdc_deploy.py --instance-name={{inputs.parameters.server-instance}} --image-tag={{workflow.parameters.milvus-image-tag}} --deploy-params=config.yaml --deploy-mode=install --env=UAT && python3.8 -W ignore vdc_deploy.py --instance-name={{inputs.parameters.server-instance}} --deploy-mode=get_endpoint_pwd  --env=UAT'
+          - ' cd /src/benchmark &&  python3.8 -m pip install -i https://pypi.doubanio.com/simple/  --trusted-host pypi.doubanio.com --upgrade pip && python3.8 -m pip install -r requirements_3.8.txt -i https://pypi.doubanio.com/simple/ --trusted-host pypi.doubanio.com && cd /src/benchmark/milvus_benchmark/vdc/ && cp /configmap-server/config.yaml . && export PYTHONPATH=/src/benchmark && python3.8 -W ignore vdc_deploy.py --instance-name={{inputs.parameters.server-instance}} --db-version-prefix={{workflow.parameters.db-version-prefix}} --deploy-params=config.yaml --deploy-mode=install --env=UAT && python3.8 -W ignore vdc_deploy.py --instance-name={{inputs.parameters.server-instance}} --deploy-mode=get_endpoint_pwd  --env=UAT'
         volumeMounts:
           - name: kube-config
             readOnly: true
@@ -100,26 +103,39 @@ spec:
           - name: endpoint
             path: /tmp/endpoint-pwd.txt
           - name: ci-source
-            path: /src/milvus
+            path: /src/milvus-cloud-test
             git:
-              repo: 'https://github.com/milvus-io/milvus.git'
+              repo: 'git@github.com:zilliztech/milvus-cloud-test.git'
               revision: master
+              sshPrivateKeySecret:
+                name: github-key
+                key: ssh-private-key
               insecureIgnoreHostKey: true
+      nodeSelector:
+        node-role: test-client
+      metadata:
+        annotations:
+          cluster-autoscaler.kubernetes.io/safe-to-evict: 'false'
       container:
         name: ''
-        image: 'harbor-ap1.zilliz.cc/qa/fouram:1.1'
+        image: 'harbor-ap1.zilliz.cc/qa/fouram:1.0'
         command:
-          - /bin/sh
+          - /bin/bash
           - '-c'
         args:
-          - ' host=$(cat /tmp/endpoint-pwd.txt| awk ''NR == 1 {print $1}'') && echo $host && port=$(cat /tmp/endpoint-pwd.txt | awk ''NR == 2 {print $1}'') && echo $port && pwd=$(cat /tmp/endpoint-pwd.txt | awk ''NR == 3 {print $1}'') && cd /src/milvus/tests/python_client && pip install --upgrade setuptools && pip install --upgrade pip &&  pip install --no-cache-dir -r requirements.txt && pwd && pytest . --tags L0 L1 -n 6 --host=$host --port=$port --user=root --password=$pwd'
+          - ' host=$(cat /tmp/endpoint-pwd.txt| awk ''NR == 1 {print $1}'') && echo $host && port=$(cat /tmp/endpoint-pwd.txt | awk ''NR == 2 {print $1}'') && echo $port && pwd=$(cat /tmp/endpoint-pwd.txt | awk ''NR == 3 {print $1}'') && cd /src/milvus-cloud-test/python_client && pip install --upgrade setuptools && pip install --upgrade pip &&  pip install -r requirements.txt && pwd && pytest testcases/. -k "not test_connection and not test_create_index_with_invalid_index_params" --tags L0 L1 L2 -n 4 --host=$host --port=$port --user=root --password=$pwd --html=/tmp/ci_logs/report.html --self-contained-html && echo "Time sleep: 5m" && sleep 300'
         resources:
           limits:
             cpu: '6'
             memory: 12Gi
           requests:
-            cpu: '1'
+            cpu: '4'
             memory: 5Gi
+      tolerations:
+        - key: node-role
+          operator: Equal
+          value: vdc-test
+          effect: NoSchedule
     - name: uninstall-milvus
       inputs:
         parameters:
@@ -136,6 +152,9 @@ spec:
               insecureIgnoreHostKey: true
       nodeSelector:
         node-role: test-client
+      metadata:
+        annotations:
+          cluster-autoscaler.kubernetes.io/safe-to-evict: 'false'
       container:
         name: ''
         image: 'harbor-ap1.zilliz.cc/qa/fouram:1.1'
@@ -164,14 +183,12 @@ spec:
     parameters:
       - name: activeDeadlineSeconds
         value: '1036800'
-      - name: milvus-image-tag
-        value: indexpool-17-7
+      - name: db-version-prefix
+        value: v2.2.0-
       - name: test-client-branch
         value: vdc
       - name: configmaps
-        value: '[{"instanceId":"1", "server-configmap": "vdc-standalone-small"} ]'
-      - name: test-sdk-version
-        value: 2.2.0.dev30
+        value: '[{"instanceId":"1", "server-configmap": "vdc-standalone-4cu"} ]'
   volumes:
     - name: kube-config
       secret:
