@@ -1,0 +1,27 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: scale-out-in-other-cron
+  namespace: qa
+spec:
+  schedule: 0 21 * * *
+  timezone: Asia/Shanghai
+  workflowSpec:
+    entrypoint: scale-out-in-tests
+    serviceAccountName: qa-admin
+    activeDeadlineSeconds: 72000
+    arguments:
+      parameters:
+        - name: milvus-repo
+          value: 'https://github.com/ThreadDao/milvus.git'
+        - name: milvus-branch
+          value: master-scale-101
+        - name: scale-cases
+          value: '[{"scale-case": "test_scale_data_node"}, {"scale-case": "test_expand_index_node"}, {"scale-case": "test_shrink_index_node"}, {"scale-case": "test_scale_proxy"}]'
+    templates:
+      - name: scale-out-in-tests
+        steps:
+          - - name: scale-tests
+              templateRef:
+                name: scale-out-in
+                template: scale-out-in
