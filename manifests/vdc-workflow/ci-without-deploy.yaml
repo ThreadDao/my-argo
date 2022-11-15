@@ -1,0 +1,205 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: vdc-ci-instance
+  namespace: qa
+spec:
+  templates:
+    - name: vdc-ci-instance
+      inputs: {}
+      outputs: {}
+      metadata: {}
+      steps:
+        - - name: call-vdc-ci-test
+            template: milvus-ci-test
+            arguments:
+              parameters:
+                - name: instance-name
+                  value: '{{item.instance-name}}'
+                - name: case-tag
+                  value: '{{item.case-tag}}'
+            withParam: '{{workflow.parameters.test-configs}}'
+    - name: uninstall-all
+      inputs: {}
+      outputs: {}
+      metadata: {}
+      steps:
+        - - name: uninstall-milvus
+            template: uninstall-milvus
+            arguments:
+              parameters:
+                - name: instance-name
+                  value: '{{item.instance-name}}'
+            withParam: '{{workflow.parameters.test-configs}}'
+    - name: milvus-ci-test
+      inputs:
+        parameters:
+          - name: instance-name
+          - name: case-tag
+      outputs: {}
+      metadata: {}
+      steps:
+        - - name: get-endpoint
+            template: get-endpoint
+            arguments:
+              parameters:
+                - name: instance-name
+                  value: '{{inputs.parameters.instance-name}}'
+        - - name: ci-test
+            template: ci-test
+            arguments:
+              parameters:
+                - name: case-tag
+                  value: '{{inputs.parameters.case-tag}}'
+              artifacts:
+                - name: endpoint
+                  from: '{{steps.get-endpoint.outputs.artifacts.endpoint}}'
+    - name: get-endpoint
+      inputs:
+        parameters:
+          - name: instance-name
+        artifacts:
+          - name: benchmark-src
+            path: /src/benchmark
+            git:
+              repo: 'git@github.com:zilliztech/milvus_benchmark.git'
+              revision: '{{workflow.parameters.test-client-branch}}'
+              sshPrivateKeySecret:
+                name: github-key
+                key: ssh-private-key
+              insecureIgnoreHostKey: true
+      outputs:
+        artifacts:
+          - name: endpoint
+            path: /tmp/endpoint-pwd.txt
+      nodeSelector:
+        node-role: test-client
+      metadata:
+        annotations:
+          cluster-autoscaler.kubernetes.io/safe-to-evict: 'false'
+      container:
+        name: ''
+        image: 'harbor-ap1.zilliz.cc/qa/fouram:1.1'
+        command:
+          - /bin/sh
+          - '-c'
+        args:
+          - ' cd /src/benchmark && python3.8 -m pip install -i https://pypi.doubanio.com/simple/  --trusted-host pypi.doubanio.com --upgrade pip && python3.8 -m pip install -r requirements_3.8.txt -i https://pypi.doubanio.com/simple/ --trusted-host pypi.doubanio.com && cd /src/benchmark/milvus_benchmark/vdc/ && export PYTHONPATH=/src/benchmark && python3.8 -W ignore vdc_deploy.py --instance-name={{inputs.parameters.instance-name}} --deploy-mode=get_endpoint_pwd  --env={{workflow.parameters.test-env}}'
+        resources: {}
+        volumeMounts:
+          - name: kube-config
+            readOnly: true
+            mountPath: /root/.kube
+          - name: db-data-path
+            mountPath: /test
+      volumes:
+        - name: db-data-path
+          persistentVolumeClaim:
+            claimName: qa-pvc
+      tolerations:
+        - key: node-role
+          operator: Equal
+          value: vdc-test
+          effect: NoSchedule
+    - name: ci-test
+      inputs:
+        parameters:
+          - name: case-tag
+            value: 'L0,L1'
+        artifacts:
+          - name: endpoint
+            path: /tmp/endpoint-pwd.txt
+          - name: ci-source
+            path: /src/milvus-cloud-test
+            git:
+              repo: 'git@github.com:zilliztech/milvus-cloud-test.git'
+              revision: master
+              sshPrivateKeySecret:
+                name: github-key
+                key: ssh-private-key
+              insecureIgnoreHostKey: true
+      outputs: {}
+      nodeSelector:
+        node-role: test-client
+      metadata:
+        annotations:
+          cluster-autoscaler.kubernetes.io/safe-to-evict: 'false'
+      container:
+        name: ''
+        image: 'harbor-ap1.zilliz.cc/qa/fouram:1.0'
+        command:
+          - /bin/bash
+          - '-c'
+        args:
+          - ' host=$(cat /tmp/endpoint-pwd.txt| awk ''NR == 1 {print $1}'') && echo $host && port=$(cat /tmp/endpoint-pwd.txt | awk ''NR == 2 {print $1}'') && echo $port && pwd=$(cat /tmp/endpoint-pwd.txt | awk ''NR == 3 {print $1}'') && cd /src/milvus-cloud-test/python_client && pip install --upgrade setuptools && pip install --upgrade pip &&  pip install -r requirements.txt && pwd && pytest testcases/. -k "not test_create_index_with_invalid_index_params" --tag={{inputs.parameters.case-tag}} -n 2 --host=$host --port=$port --user=root --password=$pwd --html=/tmp/ci_logs/report.html --self-contained-html'
+        resources:
+          limits:
+            cpu: '6'
+            memory: 12Gi
+          requests:
+            cpu: '4'
+            memory: 5Gi
+      tolerations:
+        - key: node-role
+          operator: Equal
+          value: vdc-test
+          effect: NoSchedule
+    - name: uninstall-milvus
+      inputs:
+        parameters:
+          - name: instance-name
+        artifacts:
+          - name: benchmark-src
+            path: /src/benchmark
+            git:
+              repo: 'git@github.com:zilliztech/milvus_benchmark.git'
+              revision: '{{workflow.parameters.test-client-branch}}'
+              sshPrivateKeySecret:
+                name: github-key
+                key: ssh-private-key
+              insecureIgnoreHostKey: true
+      outputs: {}
+      nodeSelector:
+        node-role: test-client
+      metadata:
+        annotations:
+          cluster-autoscaler.kubernetes.io/safe-to-evict: 'false'
+      container:
+        name: ''
+        image: 'harbor-ap1.zilliz.cc/qa/fouram:1.1'
+        command:
+          - /bin/sh
+          - '-c'
+        args:
+          - ' cd /src/benchmark &&  python3.8 -m pip install -i https://pypi.doubanio.com/simple/  --trusted-host pypi.doubanio.com --upgrade pip && python3.8 -m pip install -r requirements_3.8.txt -i https://pypi.doubanio.com/simple/ --trusted-host pypi.doubanio.com && cd /src/benchmark/milvus_benchmark/vdc/ && export PYTHONPATH=/src/benchmark && python3.8 -W ignore vdc_deploy.py --instance-name={{inputs.parameters.instance-name}} --deploy-mode=delete --env={{workflow.parameters.test-env}} '
+        resources: {}
+        volumeMounts:
+          - name: kube-config
+            readOnly: true
+            mountPath: /root/.kube
+          - name: db-data-path
+            mountPath: /test
+      volumes:
+        - name: db-data-path
+          persistentVolumeClaim:
+            claimName: qa-pvc
+      tolerations:
+        - key: node-role
+          operator: Equal
+          value: vdc-test
+          effect: NoSchedule
+  entrypoint: vdc-ci-instance
+  arguments:
+    parameters:
+      - name: activeDeadlineSeconds
+        value: '1036800'
+      - name: test-client-branch
+        value: vdc
+      - name: test-env
+        value: UAT
+      - name: test-configs
+        value: '[{"instance-name":"my-instance-name", "case-tag": "L0,L1"} ]'
+  volumes:
+    - name: kube-config
+      secret:
+        secretName: qa-admin-config
