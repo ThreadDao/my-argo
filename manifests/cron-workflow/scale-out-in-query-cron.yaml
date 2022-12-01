@@ -1,27 +1,128 @@
 apiVersion: argoproj.io/v1alpha1
-kind: WorkflowTemplate
+kind: CronWorkflow
 metadata:
-  name: scale-out-in-other-cron
+  name: scale-out-in-query-cron
   namespace: qa
 spec:
-  schedule: 0 21 * * *
-  timezone: Asia/Shanghai
   workflowSpec:
+    templates:
+      - name: scale-out-in-tests
+        inputs: {}
+        outputs: {}
+        metadata: {}
+        steps:
+          - - name: find-milvus-image-tag
+              arguments:
+                parameters:
+                  - name: tag-prefix
+                    value: '{{workflow.parameters.tag-prefix}}'
+              templateRef:
+                name: find-image-tag-python
+                template: find-image-tag-python
+          - - name: call-scale-test
+              template: milvus-scale-test
+              arguments:
+                parameters:
+                  - name: image-tag
+                    value: >-
+                      {{steps.find-milvus-image-tag.outputs.parameters.image-tag}}
+                  - name: scale-case
+                    value: '{{item.scale-case}}'
+              withParam: '{{workflow.parameters.scale-cases}}'
+      - name: milvus-scale-test
+        inputs:
+          parameters:
+            - name: scale-case
+            - name: image-tag
+        outputs: {}
+        metadata: {}
+        steps:
+          - - name: scale-test
+              template: scale-test
+              arguments:
+                parameters:
+                  - name: scale-case
+                    value: '{{inputs.parameters.scale-case}}'
+                  - name: milvus-image-tag
+                    value: '{{inputs.parameters.image-tag}}'
+      - name: scale-test
+        inputs:
+          parameters:
+            - name: scale-case
+            - name: milvus-image-tag
+          artifacts:
+            - name: source
+              path: /src/milvus
+              git:
+                repo: '{{workflow.parameters.milvus-repo}}'
+                revision: '{{workflow.parameters.milvus-branch}}'
+                insecureIgnoreHostKey: true
+        outputs:
+          parameters:
+            - name: sdk
+              valueFrom:
+                path: /tmp/sdk.txt
+              globalName: global-sdk
+            - name: image-tag
+              value: '{{inputs.parameters.milvus-image-tag}}'
+              globalName: global-image-tag
+        metadata: {}
+        container:
+          name: main
+          image: 'harbor.milvus.io/qa/fouram:1.1'
+          command:
+            - /bin/bash
+            - '-c'
+          args:
+            - >-
+              cd /src/milvus/tests/python_client && pip install --upgrade
+              setuptools && pip install --upgrade pip &&  pip install
+              --no-cache-dir -r requirements.txt && echo -n  $(pip list | grep
+              pymilvus | sed 's/ //g') > /tmp/sdk.txt && cat /tmp/sdk.txt &&
+              export IN_CLUSTER=true && cd scale/ && pytest . -k
+              "{{inputs.parameters.scale-case}}"
+              --image_tag={{inputs.parameters.milvus-image-tag}} -v -s
+          resources: {}
+      - name: trigger-report-results
+        inputs: {}
+        outputs: {}
+        metadata: {}
+        resource:
+          action: create
+          manifest: |
+            apiVersion: argoproj.io/v1alpha1
+            kind: Workflow
+            metadata:
+              generateName: report-scale-
+            spec:
+              arguments:
+                parameters:
+                  - name: name
+                    value: {{workflow.name}}
+                  - name: image-tag
+                    value: {{workflow.outputs.parameters.global-image-tag}}
+                  - name: sdk
+                    value: {{workflow.outputs.parameters.global-sdk}}
+              workflowTemplateRef:
+                name: report-scale
+          successCondition: status.phase == Succeeded
+          failureCondition: 'status.phase in (Failed, Error)'
     entrypoint: scale-out-in-tests
-    serviceAccountName: qa-admin
-    activeDeadlineSeconds: 72000
     arguments:
       parameters:
         - name: milvus-repo
           value: 'https://github.com/ThreadDao/milvus.git'
         - name: milvus-branch
           value: master-scale-101
+        - name: tag-prefix
+          value: master
         - name: scale-cases
-          value: '[{"scale-case": "test_scale_data_node"}, {"scale-case": "test_expand_index_node"}, {"scale-case": "test_shrink_index_node"}, {"scale-case": "test_scale_proxy"}]'
-    templates:
-      - name: scale-out-in-tests
-        steps:
-          - - name: scale-tests
-              templateRef:
-                name: scale-out-in
-                template: scale-out-in
+          value: >-
+            [{"scale-case": "test_scale_query_node"}, {"scale-case":
+            "test_scale_query_replicas"}, {"scale-case":
+            "test_scale_in_query_node_less_than_replicas"}]
+    serviceAccountName: qa-admin
+    onExit: trigger-report-results
+    activeDeadlineSeconds: 72000
+  schedule: 0 23 * * *
+  timezone: Asia/Shanghai

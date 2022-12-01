@@ -1,0 +1,48 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: report-scale
+  namespace: qa
+spec:
+  templates:
+    - name: report-results
+      inputs:
+        parameters:
+          - name: name
+          - name: sdk
+          - name: image-tag
+        artifacts:
+          - name: source
+            path: /src/report
+            git:
+              repo: 'git@github.com:ThreadDao/report.git'
+              revision: main
+              sshPrivateKeySecret:
+                name: threaddao-key
+                key: ssh-private-key
+              insecureIgnoreHostKey: true
+      outputs: {}
+      metadata: {}
+      container:
+        name: ''
+        image: 'harbor.milvus.io/qa/fouram:1.1'
+        command:
+          - /bin/bash
+          - '-c'
+        args:
+          - >-
+            echo "sleep 20" && sleep 20 && cd /src/report/ && python3.8
+            scale_report.py --name {{inputs.parameters.name}} --sdk
+            {{inputs.parameters.sdk}} --image_tag
+            {{inputs.parameters.image-tag}}
+        resources: {}
+  entrypoint: report-results
+  arguments:
+    parameters:
+      - name: name
+        value: name
+      - name: image-tag
+        value: master-latest
+      - name: sdk
+        value: pymilvus
+  serviceAccountName: qa-admin

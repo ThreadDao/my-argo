@@ -1,0 +1,45 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: find-image-tag
+  namespace: qa
+spec:
+  templates:
+    - name: find-image-tag
+      inputs:
+        parameters:
+          - name: image-repo
+            value: milvusdb/milvus
+          - name: tag-prefix
+            value: master-latest
+        artifacts:
+          - name: source
+            path: /src/report
+            git:
+              repo: 'git@github.com:ThreadDao/report.git'
+              revision: main
+              sshPrivateKeySecret:
+                name: threaddao-key
+                key: ssh-private-key
+              insecureIgnoreHostKey: true
+      outputs:
+        parameters:
+          - name: image-tag  # name of output parameter
+            valueFrom:
+              path: /tmp/image-tag.txt
+      metadata: {}
+      container:
+        name: ''
+        image: 'bitnami/kubectl:1.21.4'
+        command:
+          - /bin/bash
+          - '-c'
+        args:
+          - >-
+            uname -a && curl --version && cd /src/report/scripts && ls -l &&
+            echo -n $(bash find-image-tag.sh -n {{inputs.parameters.image-repo}}
+            -t {{inputs.parameters.tag-prefix}} -F -L -q) > /tmp/image-tag.txt
+            && cat /tmp/image-tag.txt
+        resources: {}
+  arguments: {}
+  serviceAccountName: qa-admin

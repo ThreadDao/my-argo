@@ -1,21 +1,14 @@
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
-  namespace: qa
   name: scale-out-in
+  namespace: qa
 spec:
-  entrypoint: scale-out-in
-  serviceAccountName: qa-admin
-  arguments:
-    parameters:
-      - name: milvus-repo
-        value: 'https://github.com/ThreadDao/milvus.git'
-      - name: milvus-branch
-        value: master-scale-101
-      - name: scale-cases
-        value: '[{"scale-case": "test_scale_query_node_replicas"} ]'
   templates:
     - name: scale-out-in
+      inputs: {}
+      outputs: {}
+      metadata: {}
       steps:
         - - name: call-scale-test
             template: milvus-scale-test
@@ -28,17 +21,31 @@ spec:
       inputs:
         parameters:
           - name: scale-case
+      outputs: {}
+      metadata: {}
       steps:
+        - - name: find-milvus-image-tag
+            arguments:
+              parameters:
+                - name: tag-prefix
+                  value: '{{workflow.parameters.tag-prefix}}'
+            templateRef:
+              name: find-image-tag-python
+              template: find-image-tag-python
         - - name: scale-test
             template: scale-test
             arguments:
               parameters:
                 - name: scale-case
                   value: '{{inputs.parameters.scale-case}}'
+                - name: milvus-image-tag
+                  value: '{{steps.find-milvus-image-tag.outputs.parameters.image-tag}}'
     - name: scale-test
       inputs:
         parameters:
           - name: scale-case
+          - name: milvus-image-tag
+            value: '{{workflow.parameters.tag-prefix}}'
         artifacts:
           - name: source
             path: /src/milvus
@@ -46,8 +53,14 @@ spec:
               repo: '{{workflow.parameters.milvus-repo}}'
               revision: '{{workflow.parameters.milvus-branch}}'
               insecureIgnoreHostKey: true
+      outputs:
+        parameters:
+          - name: sdk
+            valueFrom:
+              path: /tmp/sdk.txt
+      metadata: {}
       container:
-        name: 'main'
+        name: main
         image: 'harbor.milvus.io/qa/fouram:1.1'
         command:
           - /bin/bash
@@ -56,4 +69,21 @@ spec:
           - >-
             cd /src/milvus/tests/python_client && pip install --upgrade
             setuptools && pip install --upgrade pip &&  pip install
-            --no-cache-dir -r requirements.txt && export IN_CLUSTER=true && cd scale/ && pytest . -k "{{inputs.parameters.scale-case}}" -v -s
+            --no-cache-dir -r requirements.txt && echo -n  $(pip list | grep
+            pymilvus | sed 's/ //g') > /tmp/sdk.txt && cat /tmp/sdk.txt &&
+            export IN_CLUSTER=true && cd scale/ && pytest . -k
+            "{{inputs.parameters.scale-case}}"
+            --image_tag={{inputs.parameters.milvus-image-tag}} -v -s
+        resources: {}
+  entrypoint: scale-out-in
+  arguments:
+    parameters:
+      - name: milvus-repo
+        value: 'https://github.com/ThreadDao/milvus.git'
+      - name: milvus-branch
+        value: 2.2.0-scale-101
+      - name: tag-prefix
+        value: master
+      - name: scale-cases
+        value: '[{"scale-case": "test_scale_query_replicas"} ]'
+  serviceAccountName: qa-admin

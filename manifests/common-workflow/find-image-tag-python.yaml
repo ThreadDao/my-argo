@@ -1,0 +1,41 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: find-image-tag-python
+  namespace: qa
+spec:
+  templates:
+    - name: find-image-tag-python
+      inputs:
+        parameters:
+          - name: tag-branch
+            value: master
+        artifacts:
+          - name: source
+            path: /src/report
+            git:
+              repo: 'git@github.com:ThreadDao/report.git'
+              revision: main
+              sshPrivateKeySecret:
+                name: threaddao-key
+                key: ssh-private-key
+              insecureIgnoreHostKey: true
+      outputs:
+        parameters:
+          - name: image-tag
+            valueFrom:
+              path: /tmp/image-tag.txt
+      metadata: {}
+      container:
+        name: ''
+        image: 'harbor.milvus.io/qa/fouram:1.1'
+        command:
+          - /bin/bash
+          - '-c'
+        args:
+          - >-
+            cd /src/report/ && ls -l && python3.8 image.py --branch
+            {{inputs.parameters.tag-branch}} && cat /tmp/image-tag.txt
+        resources: {}
+  arguments: {}
+  serviceAccountName: qa-admin
