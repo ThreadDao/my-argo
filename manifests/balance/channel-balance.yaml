@@ -1,0 +1,156 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: channel-balance
+  namespace: qa
+spec:
+  templates:
+    - name: fouram-loop
+      inputs: {}
+      outputs: {}
+      metadata: {}
+      steps:
+        - - name: call-fouram-test
+            template: fouram
+            arguments:
+              parameters:
+                - name: milvus-image-repository
+                  value: '{{workflow.parameters.milvus-image-repository}}'
+                - name: deploy_tool
+                  value: '{{workflow.parameters.deploy_tool}}'
+                - name: release_name_prefix
+                  value: '{{workflow.name}}'
+                - name: deploy_config
+                  value: '{{item.deploy_config}}'
+                - name: case_params
+                  value: '{{item.case_params}}'
+                - name: other_params
+                  value: '{{workflow.parameters.other_params}}'
+                - name: case_name
+                  value: '{{item.case_name}}'
+                - name: id
+                  value: '{{item.id}}'
+            withParam: '{{workflow.parameters.case_names}}'
+    - name: fouram
+      inputs:
+        parameters:
+          - name: milvus-image-repository
+          - name: deploy_tool
+          - name: release_name_prefix
+          - name: deploy_config
+          - name: case_params
+          - name: other_params
+          - name: case_name
+          - name: id
+      outputs: {}
+      metadata: {}
+      steps:
+        - - name: client-test
+            template: client-test
+            arguments:
+              parameters:
+                - name: milvus-image-repository
+                  value: '{{inputs.parameters.milvus-image-repository}}'
+                - name: deploy_tool
+                  value: '{{inputs.parameters.deploy_tool}}'
+                - name: release_name_prefix
+                  value: '{{inputs.parameters.release_name_prefix}}'
+                - name: deploy_config
+                  value: '{{inputs.parameters.deploy_config}}'
+                - name: case_params
+                  value: '{{inputs.parameters.case_params}}'
+                - name: other_params
+                  value: '{{inputs.parameters.other_params}}'
+                - name: case_name
+                  value: '{{inputs.parameters.case_name}}'
+                - name: id
+                  value: '{{inputs.parameters.id}}'
+    - name: client-test
+      inputs:
+        parameters:
+          - name: milvus-image-repository
+          - name: deploy_tool
+          - name: release_name_prefix
+          - name: deploy_config
+          - name: case_params
+          - name: other_params
+          - name: case_name
+          - name: id
+        artifacts:
+          - name: source
+            path: /src/fouram
+            git:
+              repo: '{{workflow.parameters.test-client-repository}}'
+              revision: '{{workflow.parameters.test-client-branch}}'
+              sshPrivateKeySecret:
+                name: threaddao-key
+                key: ssh-private-key
+              insecureIgnoreHostKey: true
+      outputs: {}
+      metadata: {}
+      container:
+        name: ''
+        image: 'harbor.milvus.io/qa/fouram:1.1'
+        command:
+          - /bin/bash
+          - '-c'
+        args:
+#            - ' cd /src/fouram &&  python3.8 -m pip install -i https://pypi.doubanio.com/simple/  --trusted-host pypi.doubanio.com --upgrade pip && python3.8 -m pip install -r requirements.txt -i https://pypi.doubanio.com/simple/ --trusted-host pypi.doubanio.com pypi.org && python3.8 -m pip install --extra-index-url https://test.pypi.org/simple/ pymilvus=={{workflow.parameters.test-sdk-version}} && source /src/fouram/script/set_env_var.sh && export FOURAM_LOG_SUB_FOLDER_PREFIX={{inputs.parameters.release_name_prefix}} && run_id=`date "+%Y%m%d"` && cd /src/fouram/testcases/benchmark && python3.8 -W ignore -m pytest *.py -v --tag_repository={{inputs.parameters.milvus-image-repository}} --release_name_prefix={{inputs.parameters.release_name_prefix}}-{{inputs.parameters.id}} --deploy_tool={{inputs.parameters.deploy_tool}} --deploy_config=/configmap-server/config.yaml --case_params=/configmap-client/config.yaml --html=/test/fouram/report/{{inputs.parameters.release_name_prefix}}-{{inputs.parameters.id}}.html --self-contained-html --run_id=$run_id {{inputs.parameters.other_params}} {{inputs.parameters.execut_type}} "{{inputs.parameters.case_name}}" '
+          - ' cd /src/fouram &&  python3.8 -m pip install -i https://pypi.doubanio.com/simple/  --trusted-host pypi.doubanio.com --upgrade pip && python3.8 -m pip install -r requirements.txt -i https://pypi.doubanio.com/simple/ --trusted-host pypi.doubanio.com pypi.org && python3.8 -m pip install --extra-index-url https://test.pypi.org/simple/ pymilvus=={{workflow.parameters.test-sdk-version}} && source /src/fouram/script/set_env_var.sh && export FOURAM_LOG_SUB_FOLDER_PREFIX={{inputs.parameters.release_name_prefix}} && export NAMESPACE=chaos-testing && cd /src/fouram/testcases/balance && python3.8 -W ignore -m pytest *.py -v --tag_repository={{inputs.parameters.milvus-image-repository}} --release_name_prefix={{inputs.parameters.release_name_prefix}} --deploy_tool={{inputs.parameters.deploy_tool}} --deploy_config=/configmap-server/config.yaml --case_params=/configmap-client/config.yaml --html=/test/fouram/report/{{inputs.parameters.release_name_prefix}}-{{inputs.parameters.id}}.html --self-contained-html {{inputs.parameters.other_params}} -k "{{inputs.parameters.case_name}}" '
+        resources:
+          limits:
+            cpu: '2'
+            memory: 4Gi
+        volumeMounts:
+          - name: kube-config
+            readOnly: true
+            mountPath: /root/.kube
+          - name: fouram-deploy-config
+            mountPath: /configmap-server
+          - name: fouram-case-params
+            mountPath: /configmap-client
+          - name: db-data-path
+            mountPath: /test
+      volumes:
+        - name: fouram-deploy-config
+          configMap:
+            name: '{{inputs.parameters.deploy_config}}'
+        - name: fouram-case-params
+          configMap:
+            name: '{{inputs.parameters.case_params}}'
+        - name: db-data-path-1
+          nfs:
+            server: 172.16.70.248
+            path: /zilliz/milvus
+        - name: db-data-path
+          nfs:
+            server: 172.16.70.249
+            path: /volume1/test
+      activeDeadlineSeconds: '{{workflow.parameters.activeDeadlineSeconds}}'
+  entrypoint: fouram-loop
+  arguments:
+    parameters:
+      - name: activeDeadlineSeconds
+        value: '1036800'
+      - name: test-client-repository
+        value: 'git@github.com:ThreadDao/fouram.git'
+      - name: test-client-branch
+        value: scale-rg
+      - name: milvus-image-repository
+        value: harbor.milvus.io/milvus/milvus
+      - name: deploy_tool
+        value: operator
+      - name: other_params
+        value: ' --milvus_tag_prefix=2.2.0 -s '
+      - name: case_names
+        value: ' [ {"id": 1, "case_name": "test_collection_multi_shards","deploy_config": "empty-file", "case_params": "empty-file"},
+        {"id": 2, "case_name": "test_collection_multi_shards","deploy_config": "empty-file", "case_params": "empty-file"},
+        {"id": 3, "case_name": "test_collection_multi_shards","deploy_config": "empty-file", "case_params": "empty-file"},
+        {"id": 4, "case_name": "test_collection_multi_shards","deploy_config": "empty-file", "case_params": "empty-file"}] '
+      - name: test-sdk-version
+        value: 2.3.0.dev38
+  serviceAccountName: qa-admin
+  volumes:
+    - name: kube-config
+      secret:
+        secretName: chaos-testing-kube-config

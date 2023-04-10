@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: refresh-milvus
+  namespace: qa
+data:
+  milvus.yaml: |
+    dataCoord:
+      segment:
+        compactableProportion: 0.5
+    common:
+      defaultPartitionName: "a_partition"  # default partition name for a collection
+      defaultIndexName: "a_index"  # default index name
+      retentionDuration: 0 # time travel reserved time, insert/delete will not be cleaned in this period. 1 days in seconds
+    #  entityExpiration: -1     # Entity expiration in seconds, CAUTION make sure entityExpiration >= retentionDuration and -1 means never expire
+
+    quotaAndLimits:
+      # limitWriting decides whether dml requests are allowed.
+      limitWriting:
+        memProtection:
+    #      enabled: true
+          # When memory usage > memoryHighWaterLevel, all dml requests would be rejected;
+          # When memoryLowWaterLevel < memory usage < memoryHighWaterLevel, reduce the dml rate;
+          # When memory usage < memoryLowWaterLevel, no action.
+          # memoryLowWaterLevel should be less than memoryHighWaterLevel.
+          dataNodeMemoryLowWaterLevel: 0.25 # (0, 1], memoryLowWaterLevel in DataNodes
+          dataNodeMemoryHighWaterLevel: 0.65 # (0, 1], memoryHighWaterLevel in DataNodes

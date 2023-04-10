@@ -1,0 +1,139 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: refresh-config
+  namespace: qa
+spec:
+  templates:
+    - name: refresh-config
+      inputs: {}
+      outputs: {}
+      metadata: {}
+      steps:
+        - - name: call-refresh-config
+            template: refresh-config-test
+            arguments:
+              parameters:
+                - name: milvus-release
+                  value: '{{item.milvus-release}}'
+                - name: is-cluster
+                  value: '{{item.is-cluster}}'
+                - name: refresh-configmap
+                  value: '{{workflow.parameters.refresh-configmap}}'
+            withParam: '{{workflow.parameters.instances}}'
+    - name: refresh-config-test
+      inputs:
+        parameters:
+          - name: milvus-release
+          - name: is-cluster
+          - name: refresh-configmap
+      outputs: {}
+      metadata: {}
+      steps:
+        - - name: deploy-cluster
+            arguments:
+              parameters:
+                - name: milvus-release
+                  value: '{{inputs.parameters.milvus-release}}'
+            templateRef:
+              name: deploy-memory-milvus-cluster
+              template: deploy-memory-milvus-cluster
+            when: '{{inputs.parameters.is-cluster}} == true'
+        - - name: deploy-standalone
+            arguments:
+              parameters:
+                - name: milvus-release
+                  value: '{{inputs.parameters.milvus-release}}'
+            templateRef:
+              name: deploy-memory-milvus-standalone
+              template: deploy-memory-milvus-standalone
+            when: '{{inputs.parameters.is-cluster}} == false'
+        - - name: refresh-milvus-config
+            template: client-test
+            arguments:
+              parameters:
+                - name: milvus-release
+                  value: '{{inputs.parameters.milvus-release}}'
+                - name: refresh-configmap
+                  value: '{{inputs.parameters.refresh-configmap}}'
+    - name: client-test
+      inputs:
+        parameters:
+          - name: milvus-release
+          - name: refresh-configmap
+          - name: cloud-test-repo
+            value: 'git@github.com:ThreadDao/milvus-cloud-test.git'
+          - name: cloud-test-branch
+            value: 2.2-config
+        artifacts:
+          - name: ci-source
+            path: /src/milvus-cloud-test
+            git:
+              repo: '{{inputs.parameters.cloud-test-repo}}'
+              revision: '{{inputs.parameters.cloud-test-branch}}'
+              sshPrivateKeySecret:
+                name: threaddao-key
+                key: ssh-private-key
+              insecureIgnoreHostKey: true
+      outputs: {}
+      metadata: {}
+      container:
+        name: main
+        image: 'harbor.milvus.io/qa/test-go-milvus:1.0'
+        command:
+          - /bin/bash
+          - '-c'
+        args:
+          - ' etcd_endpoints=$(kubectl get svc -n chaos-testing | grep {{inputs.parameters.milvus-release}}-etcd | awk ''NR == 1 {print $3}'') && echo $etcd_endpoints && cd /src/milvus-cloud-test/go_client && go mod tidy && go get -u github.com/milvus-io/milvus-sdk-go/v2@v2.2.x && cd refresh_config/ && gotestsum --format testname --hide-summary=output refresh_test.go main_test.go testutil.go --addr={{inputs.parameters.milvus-release}}-milvus.chaos-testing:19530 --etcd_endpoints=$etcd_endpoints:2379 --root_path={{inputs.parameters.milvus-release}} --refresh_config=/refresh-configs/milvus.yaml -v'
+          - ' gotestsum --format testname --hide-summary=output config_test.go e2e_test.go main_test.go testutil.go --addr={{inputs.parameters.milvus-release}}-milvus.chaos-testing:19530 --root_path={{inputs.parameters.milvus-release}} --refresh_config=/refresh-configs/milvus.yaml -v'
+        resources:
+          limits:
+            cpu: '1'
+            memory: 1Gi
+          requests:
+            cpu: '1'
+            memory: 1Gi
+        volumeMounts:
+          - name: refresh-milvus-configmap
+            mountPath: /refresh-configs
+      volumes:
+        - name: refresh-milvus-configmap
+          configMap:
+            name: '{{inputs.parameters.refresh-configmap}}'
+    - name: uninstall-all
+      steps:
+        - - name: uninstall-milvus
+            template: uninstall-milvus
+            arguments:
+              parameters:
+                - name: milvus-release
+                  value: '{{item.milvus-release}}'
+            withParam: '{{workflow.parameters.instances}}'
+    - name: uninstall-milvus
+      inputs:
+        parameters:
+          - name: milvus-release
+      container:
+        name: main
+        image: 'bitnami/kubectl:1.21.4'
+        command:
+          - /bin/sh
+          - '-c'
+        args:
+          - >-
+            kubectl delete milvus {{inputs.parameters.milvus-release}} -n chaos-testing
+  entrypoint: refresh-config
+  onExit: uninstall-all
+  arguments:
+    parameters:
+      - name: milvus-image-repo
+        value: harbor.milvus.io/dockerhub/milvusdb/milvus
+      - name: milvus-image-tag
+        value: master-latest
+      - name: instances
+        value: >-
+          [{"milvus-release": "config-cluster", "is-cluster": "true"},
+          {"milvus-release":"config-standalone", "is-cluster": "false"}]
+      - name: refresh-configmap
+        value: refresh-milvus
+  serviceAccountName: qa-admin

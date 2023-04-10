@@ -1,11 +1,21 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  generateName: go-run-
+  name: zong-debug
   namespace: qa
 spec:
+  serviceAccountName: qa-admin
   containers:
     - name: main
-      image: 'golang:1.18.3-buster'
+#      image: 'golang:1.18.3-buster'
+      image: 'maven:3.8.6-openjdk-8'
       command: [ "/bin/bash", "-c", "--" ]
       args: [ "while true; do sleep 30; done;" ]
+#      volumeMounts:
+#        - name: kube-config
+#          readOnly: true
+#          mountPath: /root/.kube
+#  volumes:
+#    - name: kube-config
+#      secret:
+#        secretName: fouram-admin-config
