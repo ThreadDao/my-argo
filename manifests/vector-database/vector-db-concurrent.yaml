@@ -1,0 +1,59 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: vector-db-test
+  namespace: qa
+spec:
+  templates:
+    - name: vector-db-test
+      steps:
+        - - name: call-vector-db-test
+            template: vdb-test
+    - name: vdb-test
+      inputs:
+        parameters:
+          - name: engine
+          - name: host
+          - name: test_type
+          - name: concurrent_numbers
+            value: [10]
+          - name: client_configmap
+          - name: other_params
+        artifacts:
+          - name: source
+            path: /src/vector-db
+            git:
+              repo: 'git@github.com:zilliztech/vectordb-benchmark.git'
+              revision: master
+              sshPrivateKeySecret:
+                name: github-key
+                key: ssh-private-key
+              insecureIgnoreHostKey: true
+      container:
+        name: 'test'
+        image: 'harbor.milvus.io/qa/fouram:1.1'
+        command:
+          - /bin/bash
+          - '-c'
+        args:
+          - 'cd /src/vector-db && pip install -r requirements.txt && cd configurations && cp /configmap-client/config.yaml {{inputs.parameters.engine}}_{{inputs.parameters.test_type}}.yaml && declare num={{inputs.parameters.deploy_config}}; for n in "${num[@]}"; do cp {{inputs.parameters.engine}}_{{inputs.parameters.test_type}}.yaml m_"$n"_a.yaml; sed -i "s/concurrent_number: 10/concurrent_number: $n/" m_"$n"_a.yaml; done && rm {{inputs.parameters.engine}}_{{inputs.parameters.test_type}}.yaml && ls && cd .. && python3 main.py {{inputs.parameters.test_type}} --host {{inputs.parameters.host}} --engine {{inputs.parameters.engine}} {{inputs.parameters.other_params}}'
+        volumeMounts:
+          - name: client-config
+            mountPath: /configmap-client
+      volumes:
+        - name: client-config
+          configMap:
+            name: '{{inputs.parameters.client_configmap}}'
+  entrypoint: vector-db-test
+  arguments:
+    parameters:
+      - name: engine
+        value: milvus
+      - name: host
+        value: localhost
+      - name: test_type
+        value: concurrent
+      - name: concurrent_numbers
+        value: [ 10 ]
+      - name: client_configmap
+      - name: other_params
